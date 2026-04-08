@@ -7,6 +7,7 @@ data class Track(
     val id: String,
     val title: String,
     val artist: String,
+    val artists: List<String> = emptyList(),
     val durationMs: Long,
     val streamUrl: String? = null,
     val artworkUrl: String? = null,
@@ -82,7 +83,8 @@ data class AdminStatsResponse(
 data class ArtistInfo(
     val name: String,
     val bio: String,
-    val tags: List<String>
+    val tags: List<String>,
+    val imageUrl: String? = null
 )
 
 @Serializable

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {goto} from '$app/navigation';
     import {trackToAdd} from '$lib/utils/store';
     import type {Track} from '$lib/utils/types';
 
@@ -19,7 +20,9 @@
     <img src={track.artworkUrl} alt="art">
     <div class="info">
         <div class="title">{track.title}</div>
-        <div class="artist">{track.artist}</div>
+        <div class="artist">
+            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>{#if i < track.artists.length - 1}{' & '}{/if}{/each}
+        </div>
     </div>
     {#if formatMs(track.durationMs)}
         <div class="duration">{formatMs(track.durationMs)}</div>
@@ -69,6 +72,15 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .artist-link {
+        cursor: pointer;
+    }
+
+    .artist-link:hover {
+        color: var(--text-primary);
+        text-decoration: underline;
     }
 
     .duration {

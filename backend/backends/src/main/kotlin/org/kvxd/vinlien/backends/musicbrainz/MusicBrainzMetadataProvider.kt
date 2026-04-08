@@ -25,7 +25,10 @@ private data class MbRecording(
 ) {
     fun toTrack(): Track? {
         val trackTitle = title ?: return null
-        val artist = artistCredit.firstOrNull()?.name ?: "Unknown"
+        val artist = artistCredit
+            .joinToString("") { (it.name ?: "") + (it.joinphrase ?: "") }
+            .trim()
+            .ifEmpty { "Unknown" }
         val trackId = id ?: return null
 
         val releaseId = releases.firstOrNull()?.id
@@ -47,7 +50,7 @@ private data class MbRecording(
 }
 
 @Serializable
-private data class MbArtistCredit(val name: String? = null)
+private data class MbArtistCredit(val name: String? = null, val joinphrase: String? = null)
 
 @Serializable
 private data class MbRelease(val id: String? = null)
@@ -55,6 +58,7 @@ private data class MbRelease(val id: String? = null)
 
 class MusicBrainzMetadataProvider : MetadataProvider {
     override val name = "MusicBrainz"
+    override val searchable = false
 
     override suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
         try {

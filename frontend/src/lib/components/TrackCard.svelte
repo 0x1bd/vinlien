@@ -11,23 +11,18 @@
 <div class="track-card" on:click={onPlay}>
     <div class="img-wrapper">
         <img src={track.artworkUrl} alt="art">
-        <button class="play-overlay">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-            </svg>
-        </button>
     </div>
     <div class="info">
         <div class="title">{track.title}</div>
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div
-                class="artist artist-link"
-                on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(track.artist)}`)}
-        >
-            {track.artist}
+        <div class="artist">
+            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>{#if i < track.artists.length - 1}{' & '}{/if}{/each}
         </div>
     </div>
+    <button class="play-overlay">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+        </svg>
+    </button>
 </div>
 
 <style>
@@ -37,6 +32,7 @@
         border-radius: 8px;
         cursor: pointer;
         transition: 0.3s;
+        position: relative;
     }
 
     .track-card:hover {
@@ -61,8 +57,8 @@
 
     .play-overlay {
         position: absolute;
-        bottom: 8px;
-        right: 8px;
+        bottom: 16px;
+        right: 16px;
         width: 48px;
         height: 48px;
         padding: 0;
@@ -98,8 +94,15 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        display: inline-block;
-        max-width: 100%;
+    }
+
+    .artist-link {
+        cursor: pointer;
+    }
+
+    .artist-link:hover {
+        color: var(--text-primary);
+        text-decoration: underline;
     }
 
     @media (max-width: 600px) {

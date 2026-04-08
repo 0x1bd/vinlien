@@ -2,6 +2,7 @@ export interface Track {
     id: string;
     title: string;
     artist: string;
+    artists: string[];
     durationMs: number;
     streamUrl?: string | null;
     artworkUrl?: string | null;
@@ -69,4 +70,5 @@ export interface ArtistInfo {
     name: string;
     bio: string;
     tags: string[];
+    imageUrl?: string | null;
 }

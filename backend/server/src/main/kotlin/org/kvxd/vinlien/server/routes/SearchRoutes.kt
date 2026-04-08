@@ -69,9 +69,13 @@ fun Route.searchRoutes(backends: BackendManager) {
         }
 
         val tracks = backends.search(query, preferred)
-            .distinctBy { normalizeForDedup(it.title) + normalizeForDedup(it.artist) }
+            .filter { it.artworkUrl != null }
+            .groupBy { normalizeForDedup(it.title) }
+            .values
+            .map { group -> group.maxByOrNull { it.artists.size } ?: group.first() }
 
         val albums = backends.searchAlbums(query, preferred)
+            .filter { it.artworkUrl != null }
             .distinctBy { normalizeForDedup(it.title) + normalizeForDedup(it.artist) }
 
         val response = SearchResponse(tracks, albums)
@@ -140,7 +144,9 @@ fun Route.searchRoutes(backends: BackendManager) {
 
     get("/api/artist/{name}/albums") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
-        call.respond(backends.getArtistAlbums(name))
+        val albums = backends.getArtistAlbums(name)
+            .distinctBy { it.title.lowercase().replace(Regex("[^a-z]"), "") }
+        call.respond(albums)
     }
 
     get("/api/album/{id}") {

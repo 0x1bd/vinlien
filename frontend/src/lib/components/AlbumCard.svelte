@@ -9,7 +9,11 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="album-card" on:click={() => goto(`/album/${encodeURIComponent(album.id)}`)}>
     <div class="img-wrapper">
-        <img src={album.artworkUrl} alt="album art">
+        {#if album.artworkUrl}
+            <img src={album.artworkUrl} alt="album art">
+        {:else}
+            <div class="artwork-placeholder">{album.title[0]?.toUpperCase() ?? '?'}</div>
+        {/if}
         <div class="year-badge">{album.year || ''}</div>
     </div>
     <div class="info">
@@ -44,6 +48,20 @@
         height: 100%;
         object-fit: cover;
         border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .artwork-placeholder {
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+        background: linear-gradient(135deg, var(--bg-elevated), var(--accent-color));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        font-weight: 800;
+        color: #fff;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
 

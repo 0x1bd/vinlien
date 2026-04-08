@@ -64,11 +64,18 @@ fun Application.module() {
 
     val invidious = LocalInvidiousBackend(Config.data.invidiousUrl)
     val soundcloud = SoundCloudBackend()
+    val itunes = ItunesMetadataProvider()
 
     val metadataProviders = buildList {
-        if (Config.data.lastFmApiKey.isNotBlank()) add(LastFmMetadataProvider(Config.data.lastFmApiKey))
-        add(ItunesMetadataProvider())
+        if (Config.data.lastFmApiKey.isNotBlank()) add(
+            LastFmMetadataProvider(
+                Config.data.lastFmApiKey,
+                itunes::fetchCover,
+                Config.data.lastFmUsername
+            )
+        )
         add(soundcloud)
+        add(itunes)
         add(MusicBrainzMetadataProvider())
         add(invidious)
     }

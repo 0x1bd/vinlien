@@ -13,6 +13,7 @@ import org.kvxd.vinlien.backends.sharedJson
 import org.kvxd.vinlien.shared.Album
 import org.kvxd.vinlien.shared.ArtistInfo
 import org.kvxd.vinlien.shared.Track
+import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.UUID
 
@@ -23,7 +24,20 @@ private data class LfmResponse(
     val tracks: LfmWrapper? = null,
     val album: LfmAlbum? = null,
     val artist: LfmArtistData? = null,
-    val track: LfmTrackInfo? = null
+    val track: LfmTrackInfo? = null,
+    val topalbums: LfmTopAlbumsWrapper? = null
+)
+
+@Serializable
+private data class LfmTopAlbumsWrapper(
+    val album: JsonElement? = null
+)
+
+@Serializable
+private data class LfmTopAlbumItem(
+    val name: String? = null,
+    val artist: JsonElement? = null,
+    val image: List<LfmImage> = emptyList()
 )
 
 @Serializable
@@ -42,13 +56,18 @@ private data class LfmWrapper(
 private data class LfmTrack(
     val name: String? = null,
     val artist: JsonElement? = null,
-    val duration: String? = null,
+    val duration: JsonElement? = null,
+    val listeners: String? = null,
     val url: String? = null
 ) {
     fun toTrack(fallbackArtist: String? = null): Track? {
         val title = name ?: return null
         val resolvedArtist = getArtistName() ?: fallbackArtist ?: return null
-        val durationMs = duration?.toLongOrNull()?.let { it * 1000L } ?: 0L
+        val durationSec = when (val d = duration) {
+            is JsonPrimitive -> if (d.isString) d.content.toLongOrNull() else d.longOrNull
+            else -> null
+        } ?: 0L
+        val durationMs = durationSec * 1000L
 
         return Track(
             id = "lastfm:${UUID.randomUUID()}",
@@ -71,16 +90,21 @@ private data class LfmTrack(
 }
 
 @Serializable
+private data class LfmWiki(val published: String? = null)
+
+@Serializable
 private data class LfmAlbum(
     val name: String? = null,
     val artist: String? = null,
     val image: List<LfmImage> = emptyList(),
-    val tracks: LfmWrapper? = null
+    val tracks: LfmWrapper? = null,
+    val wiki: LfmWiki? = null
 ) {
     fun toDomainAlbum(): Album? {
         val title = name ?: return null
         val artistName = artist ?: return null
-        val artworkUrl = image.lastOrNull()?.text?.takeIf { it.isNotBlank() }
+        val artworkUrl = image.lastOrNull()?.text
+            ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
 
         return Album(
             id = "lastfm:album:${artistName}:::${title}",
@@ -101,7 +125,8 @@ private data class LfmImage(
 private data class LfmArtistData(
     val name: String? = null,
     val bio: LfmBio? = null,
-    val tags: LfmTagsWrapper? = null
+    val tags: LfmTagsWrapper? = null,
+    val image: List<LfmImage> = emptyList()
 )
 
 @Serializable
@@ -120,7 +145,11 @@ private data class LfmTrackInfo(val album: LfmAlbumInfo? = null)
 private data class LfmAlbumInfo(val image: List<LfmImage> = emptyList())
 
 
-class LastFmMetadataProvider(private val apiKey: String) : MetadataProvider {
+class LastFmMetadataProvider(
+    private val apiKey: String,
+    private val fallbackCoverFetcher: (suspend (artist: String, title: String) -> String?)? = null,
+    private val username: String = ""
+) : MetadataProvider {
     override val name = "Last.fm"
 
     private fun apiUrl(method: String, vararg params: Pair<String, String>): String {
@@ -151,10 +180,46 @@ class LastFmMetadataProvider(private val apiKey: String) : MetadataProvider {
     }
 
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        val res =
-            fetchParsed(apiUrl("track.getsimilar", "artist" to track.artist, "track" to track.title, "limit" to "15"))
-        val tracks = res.similartracks?.track.parseLfmList<LfmTrack>()
-        tracks.mapNotNull { it.toTrack() }.withCovers()
+        val primaryArtist = track.artists.firstOrNull() ?: track.artist
+
+        val urlPair = parseLastFmUrl(track.lastFmUrl)
+        if (urlPair != null) {
+            val (urlArtist, urlTitle) = urlPair
+            val res = fetchParsed(apiUrl("track.getsimilar", "artist" to urlArtist, "track" to urlTitle, "limit" to "15"))
+            val rawTracks = res.similartracks?.track.parseLfmList<LfmTrack>()
+            if (rawTracks.isNotEmpty()) return@withContext rawTracks.mapNotNull { it.toTrack() }.withCovers()
+        }
+
+        val (queryArtist, queryTitle) = findMostPopularLastFmMatch(track.title, primaryArtist)
+            ?: (primaryArtist to track.title)
+        val res = fetchParsed(apiUrl("track.getsimilar", "artist" to queryArtist, "track" to queryTitle, "limit" to "15"))
+        res.similartracks?.track.parseLfmList<LfmTrack>().mapNotNull { it.toTrack() }.withCovers()
+    }
+
+    private fun parseLastFmUrl(url: String?): Pair<String, String>? {
+        if (url == null) return null
+        val match = Regex("""last\.fm/music/([^/_][^/]*)/_/([^?#]+)""").find(url) ?: return null
+        val artist = URLDecoder.decode(match.groupValues[1].replace("+", " "), "UTF-8")
+        val title  = URLDecoder.decode(match.groupValues[2].replace("+", " "), "UTF-8")
+        return artist to title
+    }
+
+    private suspend fun findMostPopularLastFmMatch(title: String, primaryArtist: String): Pair<String, String>? {
+        val raw = runCatching {
+            fetchParsed(apiUrl("track.search", "track" to title, "limit" to "10"))
+                .results?.trackmatches?.track.parseLfmList<LfmTrack>()
+        }.getOrNull() ?: return null
+
+        val byPopularity = raw.sortedByDescending { it.listeners?.toLongOrNull() ?: 0L }
+        val normalizedPrimary = primaryArtist.lowercase()
+
+        val best = byPopularity.firstOrNull { t ->
+            t.toTrack()?.artist?.lowercase()?.let { a ->
+                a.contains(normalizedPrimary) || normalizedPrimary.contains(a)
+            } == true
+        } ?: return null
+
+        return best.toTrack()?.let { it.artist to it.title }
     }
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
@@ -185,20 +250,53 @@ class LastFmMetadataProvider(private val apiKey: String) : MetadataProvider {
 
             val artistName = albumObj.artist ?: parts[0]
             val title = albumObj.name ?: parts[1]
-            val artworkUrl = albumObj.image.lastOrNull()?.text?.takeIf { it.isNotBlank() }
+            val artworkUrl = albumObj.image.lastOrNull()?.text
+                ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+
+            val wikiYear = albumObj.wiki?.published
+                ?.let { Regex("""\b(\d{4})\b""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
 
             val rawTracks = albumObj.tracks?.track.parseLfmList<LfmTrack>()
-            val tracks = rawTracks.mapNotNull { it.toTrack(fallbackArtist = artistName) }
+            val tracks = rawTracks.mapNotNull { it.toTrack(fallbackArtist = artistName) }.withCovers()
 
-            Album(id = id, title = title, artist = artistName, artworkUrl = artworkUrl, tracks = tracks)
+            Album(id = id, title = title, artist = artistName, artworkUrl = artworkUrl, year = wikiYear, tracks = tracks)
         } catch (e: Exception) {
             null
         }
     }
 
+    override suspend fun getArtistAlbums(artist: String): List<Album> = withContext(Dispatchers.IO) {
+        try {
+            val res = fetchParsed(apiUrl("artist.gettopalbums", "artist" to artist, "autocorrect" to "1", "limit" to "50"))
+            res.topalbums?.album.parseLfmList<LfmTopAlbumItem>().mapNotNull { item ->
+                val title = item.name ?: return@mapNotNull null
+                val artistName = when (val a = item.artist) {
+                    is JsonObject -> a["name"]?.jsonPrimitive?.content ?: artist
+                    is JsonPrimitive -> a.content
+                    else -> artist
+                }
+                val artworkUrl = item.image.lastOrNull()?.text
+                    ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+                Album(
+                    id = "lastfm:album:${artistName}:::${title}",
+                    title = title,
+                    artist = artistName,
+                    artworkUrl = artworkUrl
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     override suspend fun getArtistInfo(name: String): ArtistInfo? = withContext(Dispatchers.IO) {
         try {
-            val res = fetchParsed(apiUrl("artist.getinfo", "artist" to name, "autocorrect" to "1"))
+            val params = buildList {
+                add("artist" to name)
+                add("autocorrect" to "1")
+                if (username.isNotBlank()) add("username" to username)
+            }
+            val res = fetchParsed(apiUrl("artist.getinfo", *params.toTypedArray()))
             val artistObj = res.artist ?: return@withContext null
 
             val rawBio = artistObj.bio?.summary ?: ""
@@ -206,10 +304,16 @@ class LastFmMetadataProvider(private val apiKey: String) : MetadataProvider {
 
             val tags = artistObj.tags?.tag.parseLfmList<LfmTag>().mapNotNull { it.name }.take(5)
 
+            val imageUrl = listOf("mega", "extralarge", "large").firstNotNullOfOrNull { size ->
+                artistObj.image.firstOrNull { it.size == size }?.text
+                    ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+            }
+
             ArtistInfo(
                 name = artistObj.name ?: name,
                 bio = cleanBio,
-                tags = tags
+                tags = tags,
+                imageUrl = imageUrl
             )
         } catch (e: Exception) {
             null
@@ -220,6 +324,7 @@ class LastFmMetadataProvider(private val apiKey: String) : MetadataProvider {
         map { track ->
             async {
                 val cover = fetchAlbumCover(track.artist, track.title)
+                    ?: fallbackCoverFetcher?.invoke(track.artist, track.title)
                 cover?.let { track.copy(artworkUrl = it) } ?: track
             }
         }.awaitAll()

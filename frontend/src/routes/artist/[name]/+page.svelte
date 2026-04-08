@@ -11,6 +11,14 @@
     let tracks: Track[] = [];
     let albums: Album[] = [];
     let artistInfo: ArtistInfo | null = null;
+
+    // Albums whose title matches a top track title are singles
+    $: filteredAlbums = albums.filter(album =>
+        !tracks.some(t =>
+            t.title.toLowerCase() === album.title.toLowerCase() &&
+            t.artist.toLowerCase() === album.artist.toLowerCase()
+        )
+    );
     let isExpanded = false;
     let isLoading = true;
 
@@ -96,7 +104,11 @@
 {:else}
     <div class="artist-header">
         <div class="artist-avatar">
-            {artistName[0].toUpperCase()}
+            {#if artistInfo?.imageUrl}
+                <img src={artistInfo.imageUrl} alt={artistName} class="artist-photo"/>
+            {:else}
+                {artistName[0].toUpperCase()}
+            {/if}
         </div>
         <div class="artist-meta">
             <h2 class="page-title">{artistName}</h2>
@@ -137,12 +149,12 @@
         </div>
     {/if}
 
-    {#if albums.length > 0}
+    {#if filteredAlbums.length > 0}
         <div class="section-header" style="margin-top: 48px;">
             <p>Albums</p>
         </div>
         <div class="album-grid">
-            {#each albums as album}
+            {#each filteredAlbums as album}
                 <div class="album-item-wrapper">
                     <AlbumCard {album}/>
                 </div>
@@ -174,6 +186,14 @@
         color: #fff;
         flex-shrink: 0;
         box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+        overflow: hidden;
+    }
+
+    .artist-photo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
     }
 
     .artist-meta {

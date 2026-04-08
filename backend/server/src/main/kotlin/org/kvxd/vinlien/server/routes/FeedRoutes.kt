@@ -66,13 +66,13 @@ fun Route.feedRoutes(backends: BackendManager) {
                 .map { it.toTrack() }
         }
 
-        val recentlyPlayed = parsedTracks.distinctBy { it.id }.take(10)
+        val recentlyPlayed = parsedTracks.distinctBy { it.canonicalId ?: it.id }.take(10)
         val trackCounts = parsedTracks.groupingBy { it }.eachCount()
         val listenAgain = trackCounts.filter { it.value >= 2 }.keys.toList().shuffled().take(10)
         val recentIds = recentlyPlayed.take(15).map { it.id }
         val forgottenFavorites =
             trackCounts.filter { it.value >= 2 && !recentIds.contains(it.key.id) }.keys.toList().take(10)
-        val artists = parsedTracks.map { it.artist }.distinct().shuffled().take(3)
+        val artists = parsedTracks.flatMap { it.artists }.distinct().shuffled().take(3)
 
         call.respond(HomeFeed(recentlyPlayed, listenAgain, forgottenFavorites, artists))
     }

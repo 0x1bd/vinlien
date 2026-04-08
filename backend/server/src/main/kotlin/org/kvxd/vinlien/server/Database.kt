@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.kvxd.vinlien.backends.Normalizer
 import org.kvxd.vinlien.shared.Track
 import org.mindrot.jbcrypt.BCrypt
 
@@ -85,7 +86,7 @@ object DatabaseFactory {
     suspend fun <T> dbQuery(block: suspend () -> T): T =
         newSuspendedTransaction(Dispatchers.IO) { block() }
 
-    fun ResultRow.toTrack() = Track(
+    fun ResultRow.toTrack() = Normalizer.track(Track(
         id = this[Tracks.id],
         title = this[Tracks.title],
         artist = this[Tracks.artist],
@@ -94,7 +95,7 @@ object DatabaseFactory {
         artworkUrl = this[Tracks.artworkUrl],
         canonicalId = this[Tracks.canonicalId],
         lastFmUrl = this[Tracks.lastFmUrl]
-    )
+    ))
 
     fun insertOrUpdateTrack(track: Track) {
         val exists = Tracks.selectAll().where { Tracks.id eq track.id }.count() > 0

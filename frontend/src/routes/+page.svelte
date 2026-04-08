@@ -38,8 +38,8 @@
             searchResults = await apiRequest(`/api/search?q=${encodeURIComponent(query)}&providers=${providers}`);
 
             uniqueArtists = Array.from(new Set([
-                ...searchResults.tracks.map((t: any) => t.artist),
-                ...searchResults.albums.map((a: any) => a.artist)
+                ...searchResults.tracks.flatMap((t: any) => t.artists as string[]),
+                ...searchResults.albums.map((a: any) => a.artist as string)
             ])).slice(0, 5);
 
             isSearching = false;
@@ -305,9 +305,13 @@
         gap: 24px;
     }
 
+    .grid > :global(*) {
+        min-width: 0;
+    }
+
     @media (max-width: 600px) {
         .grid {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
         }
     }

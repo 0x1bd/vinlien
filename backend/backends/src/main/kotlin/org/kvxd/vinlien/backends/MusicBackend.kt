@@ -7,6 +7,8 @@ import org.kvxd.vinlien.shared.Track
 interface MetadataProvider {
     val name: String
 
+    val searchable: Boolean get() = true
+
     suspend fun search(query: String): List<Track>
     suspend fun getRecommendations(track: Track): List<Track>
     suspend fun getTrending(): List<Track>

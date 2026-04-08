@@ -25,6 +25,15 @@
 
     let isMobileExpanded = false;
     let touchStartY = 0;
+    let showTrackInfo = false;
+
+    function providerLabel(id: string): string {
+        if (id.startsWith('lastfm:')) return 'Last.fm';
+        if (id.startsWith('itunes:')) return 'iTunes';
+        if (id.startsWith('sc:')) return 'SoundCloud';
+        if (id.startsWith('invidious:')) return 'Invidious';
+        return id.split(':')[0];
+    }
 
     function togglePlay() {
         $isPlaying = !$isPlaying;
@@ -121,11 +130,8 @@
                     <div class="data-row">
                         <div class="metadata">
                             <div class="title">{$currentTrack.title}</div>
-                            <!-- svelte-ignore a11y-click-events-have-key-events -->
-                            <!-- svelte-ignore a11y-no-static-element-interactions -->
-                            <div class="artist artist-link"
-                                 on:click|stopPropagation={() => { isMobileExpanded = false; if ($currentTrack) goto(`/artist/${encodeURIComponent($currentTrack.artist)}`); }}>
-                                {$currentTrack.artist}
+                            <div class="artist">
+                                {#each $currentTrack.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/artist/${encodeURIComponent(name)}`); }}>{name}</span>{#if i < $currentTrack.artists.length - 1}{' & '}{/if}{/each}
                             </div>
                         </div>
                         <div class="actions">
@@ -253,12 +259,86 @@
                             <line x1="8" y1="18" x2="21" y2="18"></line>
                         </svg>
                     </button>
+                    <button class="action-btn action-info" class:active={showTrackInfo}
+                            on:click|stopPropagation={() => { showTrackInfo = !showTrackInfo; $showQueuePanel = false; }}
+                            title="Track info">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
         {:else}
             <div class="idle-text">Pick a track to start listening</div>
         {/if}
     </div>
+
+    {#if showTrackInfo && $currentTrack}
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div class="track-info-panel" on:click|stopPropagation>
+            <div class="info-header">
+                <span class="info-title">Track Info</span>
+                <span class="provider-badge">{providerLabel($currentTrack.id)}</span>
+                <button class="icon-btn info-close" on:click|stopPropagation={() => showTrackInfo = false}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="info-rows">
+                <div class="info-row">
+                    <span class="info-label">Title</span>
+                    <span class="info-value">{$currentTrack.title}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Artist</span>
+                    <span class="info-value">{$currentTrack.artist}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Track ID</span>
+                    <span class="info-value mono">{$currentTrack.id}</span>
+                </div>
+                {#if $currentTrack.canonicalId}
+                    <div class="info-row">
+                        <span class="info-label">Canonical ID</span>
+                        <span class="info-value mono">{$currentTrack.canonicalId}</span>
+                    </div>
+                {/if}
+                {#if $currentTrack.durationMs}
+                    <div class="info-row">
+                        <span class="info-label">Duration</span>
+                        <span class="info-value">{Math.floor($currentTrack.durationMs / 60000)}:{String(Math.floor(($currentTrack.durationMs % 60000) / 1000)).padStart(2, '0')}</span>
+                    </div>
+                {/if}
+                {#if $currentTrack.lastFmUrl}
+                    <div class="info-row">
+                        <span class="info-label">Last.fm</span>
+                        <a class="info-value info-link" href={$currentTrack.lastFmUrl} target="_blank" rel="noopener noreferrer"
+                           on:click|stopPropagation>{$currentTrack.lastFmUrl}</a>
+                    </div>
+                {/if}
+                {#if $currentTrack.streamUrl}
+                    <div class="info-row">
+                        <span class="info-label">Stream URL</span>
+                        <a class="info-value info-link mono" href={$currentTrack.streamUrl} target="_blank" rel="noopener noreferrer"
+                           on:click|stopPropagation>{$currentTrack.streamUrl}</a>
+                    </div>
+                {/if}
+                {#if $currentTrack.artworkUrl}
+                    <div class="info-row">
+                        <span class="info-label">Artwork</span>
+                        <a class="info-value info-link mono" href={$currentTrack.artworkUrl} target="_blank" rel="noopener noreferrer"
+                           on:click|stopPropagation>{$currentTrack.artworkUrl}</a>
+                    </div>
+                {/if}
+            </div>
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -329,6 +409,15 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .artist .artist-link {
+        cursor: pointer;
+    }
+
+    .artist .artist-link:hover {
+        color: var(--text-primary);
+        text-decoration: underline;
     }
 
     .actions {
@@ -470,6 +559,98 @@
         color: var(--text-secondary);
         font-size: 14px;
         line-height: 90px;
+    }
+
+    .track-info-panel {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        width: 380px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px 8px 0 0;
+        padding: 16px;
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .info-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .info-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        flex: 1;
+    }
+
+    .provider-badge {
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--accent-color);
+        color: #000;
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .info-close {
+        background: transparent;
+        padding: 4px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .info-close:hover {
+        color: var(--text-primary);
+    }
+
+    .info-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .info-row {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+    }
+
+    .info-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        min-width: 80px;
+        flex-shrink: 0;
+    }
+
+    .info-value {
+        font-size: 12px;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+
+    .info-value.mono {
+        font-family: monospace;
+        font-size: 11px;
+    }
+
+    .info-link {
+        color: var(--accent-color);
+        text-decoration: none;
+    }
+
+    .info-link:hover {
+        text-decoration: underline;
     }
 
     .expanded-header, .expanded-time {
@@ -755,6 +936,18 @@
         .player-wrapper.expanded .desktop-time,
         .player-wrapper.expanded .action-vol {
             display: none;
+        }
+
+        .track-info-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            border-radius: 16px 16px 0 0;
+            z-index: 400;
+            max-height: 70dvh;
+            overflow-y: auto;
         }
     }
 </style>

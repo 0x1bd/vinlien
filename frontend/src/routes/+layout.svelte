@@ -458,6 +458,7 @@
         flex: 1;
         height: 100vh;
         overflow-y: auto;
+        overflow-x: hidden;
         background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-base) 100%);
     }
 

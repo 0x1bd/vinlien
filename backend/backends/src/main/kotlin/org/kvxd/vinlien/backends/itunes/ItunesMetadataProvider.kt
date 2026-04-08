@@ -26,7 +26,8 @@ private data class ItunesResult(
     val artworkUrl100: String? = null,
     val collectionId: Long? = null,
     val collectionName: String? = null,
-    val releaseDate: String? = null
+    val releaseDate: String? = null,
+    val trackCount: Int? = null
 ) {
     fun toTrack(): Track? {
         val title = trackName ?: return null
@@ -99,8 +100,8 @@ class ItunesMetadataProvider : MetadataProvider {
 
     override suspend fun getArtistAlbums(artist: String): List<Album> = withContext(Dispatchers.IO) {
         val res =
-            fetchParsed<ItunesResponse>("https://itunes.apple.com/search?term=${artist.encoded}&entity=album&attribute=allArtistTerm&limit=20")
-        res.results.mapNotNull { it.toAlbum() }
+            fetchParsed<ItunesResponse>("https://itunes.apple.com/search?term=${artist.encoded}&entity=album&attribute=allArtistTerm&limit=50")
+        res.results.filter { (it.trackCount ?: 1) > 1 }.mapNotNull { it.toAlbum() }
     }
 
     override suspend fun getAlbum(id: String): Album? = withContext(Dispatchers.IO) {

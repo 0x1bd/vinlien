@@ -20,8 +20,8 @@
 
     function playTrackAtIndex(index: number) {
         if (!album) return;
-        $queue = [...album.tracks];
-        $currentTrackIndex = index;
+        $queue = [album.tracks[index]];
+        $currentTrackIndex = 0;
         $isPlaying = true;
     }
 </script>

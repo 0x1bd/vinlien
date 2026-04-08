@@ -57,6 +57,7 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
     AudioProvider {
 
     override val name = "Invidious"
+    override val searchable = false
     private val logger = LoggerFactory.getLogger(LocalInvidiousBackend::class.java)
 
     private fun api(path: String) = "$instanceUrl/api/v1/$path"
@@ -115,6 +116,15 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
         return scrapeLastFmVideoId(track) ?: throw Exception("Could not resolve video ID for ${track.title}")
     }
 
+    suspend fun streamFromLastFm(track: Track): String? = withContext(Dispatchers.IO) {
+        try {
+            val id = scrapeLastFmVideoId(track) ?: return@withContext null
+            fetchAudioFromId(id)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private suspend fun scrapeLastFmVideoId(track: Track): String? {
         val urls = buildList {
             track.lastFmUrl?.let { add(it) }
@@ -131,7 +141,12 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
                         "Cookie" to "notice_preferences=2:1a8b5c6d; notice_gdpr_prefs=0,1,2:1a8b5c6d"
                     )
                 )
-                val id = Regex("""youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})""").find(html)?.groupValues?.get(1)
+                val id = listOf(
+                    Regex("""youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})"""),
+                    Regex("""youtu\.be/([a-zA-Z0-9_-]{11})"""),
+                    Regex(""""youtube_id"\s*:\s*"([a-zA-Z0-9_-]{11})""""),
+                    Regex("""data-youtube-id="([a-zA-Z0-9_-]{11})"""")
+                ).firstNotNullOfOrNull { it.find(html)?.groupValues?.get(1) }
                 if (id != null) {
                     logger.debug("Last.fm scrape OK '${track.artist} - ${track.title}': $id"); return id
                 }
