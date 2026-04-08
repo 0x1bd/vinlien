@@ -8,16 +8,15 @@ RUN npm run build
 FROM eclipse-temurin:21-jdk-alpine AS backend-build
 WORKDIR /app
 COPY . .
-COPY --from=frontend-build /app/dist ./frontend/dist
 
 ENV SKIP_NPM=true
-
 RUN ./gradlew :backend:server:installDist --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=backend-build /app/backend/server/build/install/server ./
-COPY --from=frontend-build /app/dist ./frontend/dist
+
+COPY --from=frontend-build /app/build ./frontend/build
 
 EXPOSE 8080
 CMD ["./bin/server"]
