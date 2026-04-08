@@ -24,26 +24,25 @@ data class ServerConfig(
 )
 
 object Config {
-    private val file = File("config.json")
+    private val file = File("data/config.json")
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     var data = ServerConfig()
         private set
 
     init {
+        file.parentFile?.mkdirs()
+
         var saveNeeded = false
         if (file.exists()) {
             data = json.decodeFromString(file.readText())
         } else {
             saveNeeded = true
+            file.createNewFile()
         }
 
         if (data.jwtSecret.isBlank()) {
             data = data.copy(jwtSecret = generateJwtSecret())
             saveNeeded = true
-        }
-
-        if (saveNeeded) {
-            file.writeText(json.encodeToString(data))
         }
 
         System.getenv("JWT_SECRET")?.takeIf { it.isNotBlank() }?.let { data = data.copy(jwtSecret = it) }
@@ -53,5 +52,9 @@ object Config {
         System.getenv("DB_USER")?.takeIf { it.isNotBlank() }?.let { data = data.copy(dbUser = it) }
         System.getenv("DB_PASSWORD")?.takeIf { it.isNotBlank() }?.let { data = data.copy(dbPass = it) }
         System.getenv("INVIDIOUS_URL")?.takeIf { it.isNotBlank() }?.let { data = data.copy(invidiousUrl = it) }
+
+        if (saveNeeded) {
+            file.writeText(json.encodeToString(data))
+        }
     }
 }

@@ -11,7 +11,9 @@ Open Source selfhosted music streaming application
 
 ## Installation
 
---- later ---
+The simplest way to install Vinlien is to use Docker. You can find the Docker image on ghcr: https://ghcr.io/0x1bd/vinlien
+
+This project contains a [docker-compose](docker-compose.yml) file that can be used to easily set up the application.
 
 ## LLM disclosure
 

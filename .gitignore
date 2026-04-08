@@ -50,6 +50,4 @@ test-output/
 # Coverage
 coverage/
 
-# Docker
-docker-compose.yml
 /frontend/package-lock.json

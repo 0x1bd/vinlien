@@ -1,0 +1,109 @@
+services:
+  init-sql:
+    image: alpine
+    volumes:
+      - invidious-sql:/sql
+    command: >
+      sh -c "apk add curl &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/channels.sql > /sql/01.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/videos.sql > /sql/02.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/channel_videos.sql > /sql/03.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/users.sql > /sql/04.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/session_ids.sql > /sql/05.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/nonces.sql > /sql/06.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/annotations.sql > /sql/07.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/playlists.sql > /sql/08.sql &&
+      curl -sL https://raw.githubusercontent.com/iv-org/invidious/master/config/sql/playlist_videos.sql > /sql/09.sql"
+
+  invidious-db:
+    image: docker.io/library/postgres:14
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=invidious
+      - POSTGRES_USER=invidious
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-invidious}
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+      - invidious-sql:/docker-entrypoint-initdb.d
+    depends_on:
+      init-sql:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  companion:
+    image: quay.io/invidious/invidious-companion:latest
+    restart: unless-stopped
+    environment:
+      - SERVER_SECRET_KEY=${COMPANION_KEY:-VinlienKey123456}
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - companioncache:/var/tmp/youtubei.js:rw
+    security_opt:
+      - no-new-privileges:true
+
+  invidious:
+    image: quay.io/invidious/invidious:latest
+    restart: unless-stopped
+    # Port 3000 is hidden. Vinlien communicates with it internally.
+    # If you want to browse Invidious directly, uncomment the next two lines:
+    # ports:
+    #   - "3000:3000"
+    environment:
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: invidious
+          user: invidious
+          password: ${DB_PASSWORD:-invidious}
+          host: invidious-db
+          port: 5432
+        check_tables: true
+        invidious_companion:
+        - private_url: "http://companion:8282/companion"
+        invidious_companion_key: "${COMPANION_KEY:-VinlienKey123456}"
+        hmac_key: "${INVIDIOUS_HMAC_KEY:-vinliensecretkey1234567890abcdef}"
+    healthcheck:
+      test: wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 2
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+      companion:
+        condition: service_started
+
+  vinlien:
+    image: ghcr.io/0x1bd/vinlien:main
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_URL=jdbc:postgresql://invidious-db:5432/invidious
+      - DB_USER=invidious
+      - DB_PASSWORD=${DB_PASSWORD:-invidious}
+      - INVIDIOUS_URL=http://invidious:3000
+
+      # Uncomment these if you want to use env vars instead of config.json
+      # - LASTFM_API_KEY=${LASTFM_API_KEY}
+      # - SECURE_COOKIES=true
+      # - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+
+volumes:
+  postgresdata:
+  invidious-sql:
+  companioncache:
