@@ -1,0 +1,8 @@
+# Kotlin / JVM
+*.class
+*.jar
+*.war
+*.ear
+
+# Gradle
+build/

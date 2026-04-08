@@ -1,0 +1,55 @@
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Kotlin / JVM
+*.class
+*.jar
+*.war
+*.ear
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local config
+local.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Kotlin-specific
+.kotlin/
+
+# IntelliJ caches
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Editor backups
+*~
+*.swp
+
+# Environment files
+.env
+
+# Test output
+test-output/
+
+# Coverage
+coverage/
+
+# Docker
+docker-compose.yml
+/frontend/package-lock.json

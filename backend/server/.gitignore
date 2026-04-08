@@ -1,0 +1,11 @@
+# Kotlin / JVM
+*.class
+*.jar
+*.war
+*.ear
+
+# Gradle
+build/
+
+# Specific
+config.json

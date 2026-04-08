@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --bg-base: #121212;
+    --bg-surface: #181818;
+    --bg-elevated: #282828;
+    --bg-hover: #2a2a2a;
+    --text-primary: #ffffff;
+    --text-secondary: #a3a3a3;
+    --accent-color: #2563eb;
+    --danger-color: #ef4444;
+    --border-subtle: #282828;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+.header {
+    margin-bottom: 32px;
+}
+
+.header p {
+    color: var(--text-secondary);
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.page-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+button {
+    cursor: pointer;
+    background: var(--text-primary);
+    color: var(--bg-base);
+    border: none;
+    padding: 10px 24px;
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 32px;
+    transition: 0.2s;
+}
+
+button:hover {
+    transform: scale(1.02);
+    background: #f0f0f0;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+button.danger {
+    background: transparent;
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+}
+
+button.danger:hover {
+    background: var(--danger-color);
+    color: #fff;
+}
+
+.icon-btn {
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 8px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    transform: none;
+}
+
+.icon-btn.active {
+    color: var(--accent-color);
+}
+
+input[type="text"], input[type="password"] {
+    background: var(--bg-elevated);
+    border: 1px solid transparent;
+    color: var(--text-primary);
+    padding: 14px 20px;
+    outline: none;
+    font-size: 14px;
+    border-radius: 8px;
+    transition: 0.2s;
+}
+
+input:focus {
+    border-color: var(--border-subtle);
+    background: var(--bg-hover);
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+    height: 12px;
+    display: flex;
+    align-items: center;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+    background: #404040;
+    border-radius: 2px;
+    height: 4px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 12px;
+    width: 12px;
+    background: #ffffff;
+    border-radius: 50%;
+    margin-top: -4px;
+    transition: 0.1s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+    transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-track {
+    background: #404040;
+    border-radius: 2px;
+    height: 4px;
+}
+
+input[type="range"]::-moz-range-thumb {
+    appearance: none;
+    height: 12px;
+    width: 12px;
+    background: #ffffff;
+    border-radius: 50%;
+    border: none;
+    transition: 0.1s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+    transform: scale(1.2);
+}
+
+
+.artist-link {
+    cursor: pointer;
+    transition: color 0.2s;
+    display: inline-block;
+}
+
+.artist-link:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 600px) {
+    button {
+        min-height: 44px;
+    }
+
+    input[type="text"], input[type="password"] {
+        font-size: 16px;
+        padding: 16px;
+    }
+
+    .grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+}
