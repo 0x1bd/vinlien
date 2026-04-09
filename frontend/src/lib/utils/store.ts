@@ -54,6 +54,9 @@ export const trackToAdd = writable<Track | null>(null);
 export const audioProvidersOrder = createPersistedStore<string[]>('vinlien_audioProvidersOrder', []);
 export const metaProvidersOrder = createPersistedStore<string[]>('vinlien_metaProvidersOrder', []);
 
+export const silenceSkip = createPersistedStore<boolean>('vinlien_silenceSkip', false);
+export const silenceSkipThreshold = createPersistedStore<number>('vinlien_silenceSkipThreshold', 2);
+
 export const currentTrack = derived(
     [queue, currentTrackIndex],
     ([$queue, $currentTrackIndex]) => $queue[$currentTrackIndex] || null

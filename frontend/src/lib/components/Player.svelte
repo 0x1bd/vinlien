@@ -1,7 +1,5 @@
 <script lang="ts">
     import {
-        queue,
-        currentTrackIndex,
         currentTrack,
         isPlaying,
         userPlaylists,
@@ -324,9 +322,9 @@
                 {/if}
                 {#if $currentTrack.streamUrl}
                     <div class="info-row">
-                        <span class="info-label">Stream URL</span>
-                        <a class="info-value info-link mono" href={$currentTrack.streamUrl} target="_blank" rel="noopener noreferrer"
-                           on:click|stopPropagation>{$currentTrack.streamUrl}</a>
+                        <span class="info-label">Stream</span>
+                        <a class="info-value info-link" href={$currentTrack.streamUrl} target="_blank" rel="noopener noreferrer"
+                           on:click|stopPropagation>{providerLabel($currentTrack.id)}</a>
                     </div>
                 {/if}
                 {#if $currentTrack.artworkUrl}

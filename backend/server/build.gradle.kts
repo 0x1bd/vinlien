@@ -33,6 +33,7 @@ dependencies {
     implementation(libs.slf4j.api)
 
     implementation(libs.jbcrypt)
+    implementation(libs.ktor.client.cio)
 }
 
 val buildFrontend by tasks.registering(Exec::class) {

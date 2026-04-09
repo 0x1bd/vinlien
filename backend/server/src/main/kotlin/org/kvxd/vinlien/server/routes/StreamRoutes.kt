@@ -1,12 +1,22 @@
 package org.kvxd.vinlien.server.routes
 
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.*
 import org.kvxd.vinlien.backends.BackendManager
 import org.kvxd.vinlien.shared.Track
 import org.slf4j.LoggerFactory
 import java.io.File
+
+private val proxyClient = HttpClient(CIO) {
+    engine { requestTimeout = 0 }
+    followRedirects = true
+}
 
 fun Route.streamRoutes(backends: BackendManager) {
     val logger = LoggerFactory.getLogger("StreamRoutes")
@@ -35,7 +45,22 @@ fun Route.streamRoutes(backends: BackendManager) {
         }
 
         if (urlOrPath.startsWith("http")) {
-            call.respondRedirect(urlOrPath)
+            val rangeHeader = call.request.headers[HttpHeaders.Range]
+            val upstream = proxyClient.get(urlOrPath) {
+                header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
+                if (rangeHeader != null) header(HttpHeaders.Range, rangeHeader)
+            }
+            val ct = upstream.contentType()?.toString() ?: "audio/mpeg"
+            call.response.headers.append(HttpHeaders.AcceptRanges, "bytes")
+            upstream.headers[HttpHeaders.ContentRange]?.let {
+                call.response.headers.append(HttpHeaders.ContentRange, it)
+            }
+            upstream.headers[HttpHeaders.ContentLength]?.let {
+                call.response.headers.append(HttpHeaders.ContentLength, it)
+            }
+            call.respondBytesWriter(contentType = ContentType.parse(ct), status = upstream.status) {
+                upstream.bodyAsChannel().copyTo(this)
+            }
         } else {
             val file = File(urlOrPath)
             if (file.exists()) call.respondFile(file)

@@ -8,7 +8,9 @@ import {
     isMuted,
     repeatMode,
     audioProvidersOrder,
-    user
+    user,
+    silenceSkip,
+    silenceSkipThreshold
 } from '$lib/utils/store';
 import {apiRequest} from '$lib/utils/api';
 import type {Track} from '$lib/utils/types';
@@ -24,6 +26,11 @@ class AudioManager {
     private preloadAttemptedForTrack: string | null = null;
     private isFetchingRec = false;
 
+    private audioContext: AudioContext | null = null;
+    private analyserNode: AnalyserNode | null = null;
+    private analyserBuffer: Float32Array | null = null;
+    private silenceStartTime: number | null = null;
+
     constructor() {
         this.audio.autoplay = true;
         this.preloadAudio.preload = 'auto';
@@ -32,6 +39,12 @@ class AudioManager {
             if (!u) {
                 this.audio.pause();
                 this.preloadAudio.removeAttribute('src');
+            }
+        });
+
+        this.audio.addEventListener('play', () => {
+            if (this.audioContext?.state === 'suspended') {
+                this.audioContext.resume().catch(() => {});
             }
         });
 
@@ -46,13 +59,30 @@ class AudioManager {
             if (dur > 1 && remaining <= 15 && remaining > 0) {
                 this.preloadNextTrackIfNeeded();
             }
+
+            if (get(silenceSkip) && dur > 1) {
+                if (!this.audioContext) this.initAudioContext();
+                if (this.analyserNode) {
+                    const rms = this.getRms();
+                    const threshold = get(silenceSkipThreshold);
+                    if (rms < 0.005) {
+                        if (this.silenceStartTime === null) this.silenceStartTime = cur;
+                        else if (cur - this.silenceStartTime >= threshold) {
+                            this.silenceStartTime = null;
+                            if (cur < dur / 2) this.audio.currentTime = cur + threshold;
+                            else this.NoNoplayNext();
+                        }
+                    } else {
+                        this.silenceStartTime = null;
+                    }
+                }
+            }
         });
 
         this.audio.addEventListener('ended', () => this.playNext());
 
         isPlaying.subscribe(play => {
-            if (play && this.audio.src) this.audio.play().catch(() => {
-            });
+            if (play && this.audio.src) this.audio.play().catch(() => {});
             else this.audio.pause();
         });
 
@@ -62,36 +92,30 @@ class AudioManager {
         currentTrack.subscribe(track => {
             if (track) {
                 this.preloadAttemptedForTrack = null;
-                const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
+                this.silenceStartTime = null;
 
+                const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
                 if (currentSrcId === track.id && this.audio.readyState > 0) {
-                    if (get(isPlaying)) this.audio.play().catch(() => {
-                    });
+                    if (get(isPlaying)) this.audio.play().catch(() => {});
                     return;
                 }
 
-                apiRequest('/api/history', {
-                    method: 'POST',
-                    body: track
-                }).catch(e => console.error("Failed to record history", e));
+                apiRequest('/api/history', {method: 'POST', body: track})
+                    .catch(e => console.error("Failed to record history", e));
 
                 const providers = encodeURIComponent(get(audioProvidersOrder).join(','));
                 const streamUrlParam = track.streamUrl ? `&streamUrl=${encodeURIComponent(track.streamUrl)}` : '';
-
                 this.audio.src = `/api/stream?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&durationMs=${track.durationMs}${streamUrlParam}&providers=${providers}`;
                 this.audio.load();
 
-                if (get(isPlaying)) this.audio.play().catch(() => {
-                });
+                if (get(isPlaying)) this.audio.play().catch(() => {});
 
                 if ('mediaSession' in navigator) {
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: track.title,
                         artist: track.artist,
                         album: 'Vinlien',
-                        artwork: [
-                            {src: track.artworkUrl || '', sizes: '512x512', type: 'image/jpeg'}
-                        ]
+                        artwork: [{src: track.artworkUrl || '', sizes: '512x512', type: 'image/jpeg'}]
                     });
                     navigator.mediaSession.setActionHandler('play', () => isPlaying.set(true));
                     navigator.mediaSession.setActionHandler('pause', () => isPlaying.set(false));
@@ -103,6 +127,30 @@ class AudioManager {
                 this.audio.removeAttribute('src');
             }
         });
+    }
+
+    private initAudioContext() {
+        try {
+            this.audioContext = new AudioContext();
+            const source = this.audioContext.createMediaElementSource(this.audio);
+            this.analyserNode = this.audioContext.createAnalyser();
+            this.analyserNode.fftSize = 2048;
+            this.analyserBuffer = new Float32Array(this.analyserNode.fftSize);
+            source.connect(this.analyserNode);
+            this.analyserNode.connect(this.audioContext.destination);
+        } catch (e) {
+            console.warn('[silence] AudioContext init failed:', e);
+            this.audioContext = null;
+            this.analyserNode = null;
+        }
+    }
+
+    private getRms(): number {
+        if (!this.analyserNode || !this.analyserBuffer) return 1;
+        this.analyserNode.getFloatTimeDomainData(this.analyserBuffer);
+        let sum = 0;
+        for (const s of this.analyserBuffer) sum += s * s;
+        return Math.sqrt(sum / this.analyserBuffer.length);
     }
 
     private async preloadNextTrackIfNeeded() {
@@ -119,26 +167,18 @@ class AudioManager {
         let nextTrack: Track | null = null;
         let fetchRecs = false;
 
-        if (rm === 2) {
-            nextTrack = q[idx];
-        } else if (idx + 1 < q.length) {
-            nextTrack = q[idx + 1];
-        } else if (rm === 1) {
-            nextTrack = q[0];
-        } else {
-            fetchRecs = true;
-        }
+        if (rm === 2) nextTrack = q[idx];
+        else if (idx + 1 < q.length) nextTrack = q[idx + 1];
+        else if (rm === 1) nextTrack = q[0];
+        else fetchRecs = true;
 
         if (fetchRecs) {
             this.isFetchingRec = true;
             try {
-                const recs = await apiRequest('/api/recommendations', {
-                    method: 'POST',
-                    body: {queue: q}
-                });
-                if (recs && recs.length > 0) {
+                const recs = await apiRequest('/api/recommendations', {method: 'POST', body: {queue: q}});
+                if (recs?.length > 0) {
                     nextTrack = recs[0];
-                    queue.update(currentQueue => [...currentQueue, nextTrack!]);
+                    queue.update(q => [...q, nextTrack!]);
                 }
             } catch (e) {
                 console.error("Failed to fetch recommendation", e);
@@ -151,7 +191,6 @@ class AudioManager {
             this.preloadedTrackId = nextTrack.id;
             const providers = encodeURIComponent(get(audioProvidersOrder).join(','));
             const streamUrlParam = nextTrack.streamUrl ? `&streamUrl=${encodeURIComponent(nextTrack.streamUrl)}` : '';
-
             this.preloadAudio.src = `/api/stream?id=${encodeURIComponent(nextTrack.id)}&title=${encodeURIComponent(nextTrack.title)}&artist=${encodeURIComponent(nextTrack.artist)}&durationMs=${nextTrack.durationMs}${streamUrlParam}&providers=${providers}`;
             this.preloadAudio.load();
         }
@@ -166,8 +205,7 @@ class AudioManager {
 
         if (rm === 2 && !force) {
             this.audio.currentTime = 0;
-            this.audio.play().catch(() => {
-            });
+            this.audio.play().catch(() => {});
             return;
         }
 
@@ -183,13 +221,9 @@ class AudioManager {
 
         this.isFetchingRec = true;
         try {
-            const recs = await apiRequest('/api/recommendations', {
-                method: 'POST',
-                body: {queue: q}
-            });
-
-            if (recs && recs.length > 0) {
-                queue.update(currentQueue => [...currentQueue, recs[0]]);
+            const recs = await apiRequest('/api/recommendations', {method: 'POST', body: {queue: q}});
+            if (recs?.length > 0) {
+                queue.update(q => [...q, recs[0]]);
                 currentTrackIndex.set(idx + 1);
             } else {
                 isPlaying.set(false);

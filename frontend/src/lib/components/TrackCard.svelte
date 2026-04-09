@@ -4,13 +4,28 @@
 
     export let track: Track;
     export let onPlay: () => void;
+
+    function placeholderGradient(seed: string): string {
+        let h = 0;
+        for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+        const hue1 = (h >>> 0) % 360;
+        const hue2 = (hue1 + 40 + ((h >>> 8) % 80)) % 360;
+        const angle = (h >>> 16) % 360;
+        return `linear-gradient(${angle}deg, hsl(${hue1},60%,30%), hsl(${hue2},70%,50%))`;
+    }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="track-card" on:click={onPlay}>
     <div class="img-wrapper">
-        <img src={track.artworkUrl} alt="art">
+        {#if track.artworkUrl}
+            <img src={track.artworkUrl} alt="art">
+        {:else}
+            <div class="artwork-placeholder" style="background: {placeholderGradient(track.artist + track.title)}">
+                {track.title[0]?.toUpperCase() ?? '?'}
+            </div>
+        {/if}
     </div>
     <div class="info">
         <div class="title">{track.title}</div>
@@ -53,6 +68,20 @@
         object-fit: cover;
         border-radius: 6px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .artwork-placeholder {
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        font-weight: 800;
+        color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     }
 
     .play-overlay {

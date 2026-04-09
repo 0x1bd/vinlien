@@ -3,6 +3,15 @@
     import type {Album} from '$lib/utils/types';
 
     export let album: Album;
+
+    function placeholderGradient(seed: string): string {
+        let h = 0;
+        for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+        const hue1 = ((h >>> 0) % 360);
+        const hue2 = (hue1 + 40 + ((h >>> 8) % 80)) % 360;
+        const angle = (h >>> 16) % 360;
+        return `linear-gradient(${angle}deg, hsl(${hue1},60%,30%), hsl(${hue2},70%,50%))`;
+    }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -12,7 +21,9 @@
         {#if album.artworkUrl}
             <img src={album.artworkUrl} alt="album art">
         {:else}
-            <div class="artwork-placeholder">{album.title[0]?.toUpperCase() ?? '?'}</div>
+            <div class="artwork-placeholder" style="background: {placeholderGradient(album.artist + album.title)}">
+                {album.title[0]?.toUpperCase() ?? '?'}
+            </div>
         {/if}
         <div class="year-badge">{album.year || ''}</div>
     </div>
@@ -55,14 +66,14 @@
         width: 100%;
         height: 100%;
         border-radius: 6px;
-        background: linear-gradient(135deg, var(--bg-elevated), var(--accent-color));
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 48px;
         font-weight: 800;
-        color: #fff;
+        color: rgba(255, 255, 255, 0.9);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     }
 
     .year-badge {

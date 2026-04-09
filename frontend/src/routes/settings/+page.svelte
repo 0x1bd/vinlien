@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {showVolumeSlider, metaProvidersOrder, audioProvidersOrder} from '$lib/utils/store';
+    import {showVolumeSlider, metaProvidersOrder, audioProvidersOrder, silenceSkip, silenceSkipThreshold} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {onMount} from 'svelte';
     import type {Writable} from 'svelte/store';
@@ -55,6 +55,26 @@
 
         <label class="switch">
             <input type="checkbox" bind:checked={$showVolumeSlider}>
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <div class="setting-item">
+        <div class="info">
+            <h3>Silence Skip</h3>
+            {#if $silenceSkip}
+                <p>Skipping after
+                    <button class="threshold-btn" on:click={() => $silenceSkipThreshold = Math.max(1, $silenceSkipThreshold - 1)}>−</button>
+                    <span class="threshold-val">{$silenceSkipThreshold}</span>
+                    <button class="threshold-btn" on:click={() => $silenceSkipThreshold = Math.min(10, $silenceSkipThreshold + 1)}>+</button>
+                    s of silence.
+                </p>
+            {:else}
+                <p>Automatically skip silence at the beginning or end of tracks.</p>
+            {/if}
+        </div>
+        <label class="switch">
+            <input type="checkbox" bind:checked={$silenceSkip}>
             <span class="slider"></span>
         </label>
     </div>
@@ -203,6 +223,33 @@
     .controls button:disabled {
         opacity: 0.3;
         cursor: not-allowed;
+    }
+
+    .threshold-btn {
+        background: var(--bg-hover);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        font-size: 14px;
+        line-height: 1;
+        padding: 0;
+        cursor: pointer;
+        vertical-align: middle;
+    }
+
+    .threshold-btn:hover {
+        background: var(--border-subtle);
+    }
+
+    .threshold-val {
+        display: inline-block;
+        min-width: 16px;
+        text-align: center;
+        font-weight: 700;
+        color: var(--text-primary);
+        vertical-align: middle;
     }
 
     .switch {
