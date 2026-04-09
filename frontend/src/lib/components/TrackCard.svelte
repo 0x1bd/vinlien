@@ -1,26 +1,21 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import type {Track} from '$lib/utils/types';
+    import {placeholderGradient} from '$lib/utils/artwork';
 
     export let track: Track;
     export let onPlay: () => void;
 
-    function placeholderGradient(seed: string): string {
-        let h = 0;
-        for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-        const hue1 = (h >>> 0) % 360;
-        const hue2 = (hue1 + 40 + ((h >>> 8) % 80)) % 360;
-        const angle = (h >>> 16) % 360;
-        return `linear-gradient(${angle}deg, hsl(${hue1},60%,30%), hsl(${hue2},70%,50%))`;
-    }
+    let imgError = false;
+    $: if (track) imgError = false;
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="track-card" on:click={onPlay}>
     <div class="img-wrapper">
-        {#if track.artworkUrl}
-            <img src={track.artworkUrl} alt="art">
+        {#if track.artworkUrl && !imgError}
+            <img src={track.artworkUrl} alt="art" loading="lazy" on:error={() => imgError = true}>
         {:else}
             <div class="artwork-placeholder" style="background: {placeholderGradient(track.artist + track.title)}">
                 {track.title[0]?.toUpperCase() ?? '?'}
@@ -30,7 +25,11 @@
     <div class="info">
         <div class="title">{track.title}</div>
         <div class="artist">
-            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>{#if i < track.artists.length - 1}{' & '}{/if}{/each}
+            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events -->
+                <!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link"
+                                                                                on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>
+                {#if i < track.artists.length - 1}{' & '}{/if}
+            {/each}
         </div>
     </div>
     <button class="play-overlay">

@@ -8,7 +8,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
-import org.kvxd.vinlien.backends.BackendManager
+import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.shared.SearchResponse
@@ -51,11 +51,10 @@ fun normalizeForDedup(title: String): String {
     return t.trim().replace(Regex("\\s+"), " ")
 }
 
-fun Route.searchRoutes(backends: BackendManager) {
+fun Route.searchRoutes(engine: AggregationEngine) {
     get("/api/search") {
         val query = call.request.queryParameters["q"] ?: ""
         val providersParamRaw = call.request.queryParameters["providers"]
-        val preferred = providersParamRaw?.lowercase()?.split(",")?.firstOrNull { it.isNotEmpty() }
 
         if (query.isBlank()) {
             call.respond(SearchResponse(emptyList(), emptyList()))
@@ -68,13 +67,11 @@ fun Route.searchRoutes(backends: BackendManager) {
             return@get
         }
 
-        val tracks = backends.search(query, preferred)
+        val tracks = engine.searchTracks(query)
             .filter { it.artworkUrl != null }
-            .groupBy { normalizeForDedup(it.title) }
-            .values
-            .map { group -> group.maxByOrNull { it.artists.size } ?: group.first() }
+            .distinctBy { normalizeForDedup(it.title) + it.artist.lowercase().take(6) }
 
-        val albums = backends.searchAlbums(query, preferred)
+        val albums = engine.searchAlbums(query)
             .filter { it.artworkUrl != null }
             .distinctBy { normalizeForDedup(it.title) + normalizeForDedup(it.artist) }
 
@@ -115,20 +112,18 @@ fun Route.searchRoutes(backends: BackendManager) {
             }
         }
 
-        val historyTitlesClean =
-            (queue.map { it.title } + recentHistoryTitles + dislikedTitles).map { normalizeForDedup(it) }
+        val historyTitlesClean = (queue.map { it.title } + recentHistoryTitles + dislikedTitles)
+            .map { normalizeForDedup(it) }
 
         fun isDuplicate(candidateTitle: String): Boolean {
-            val cleanCandidate = normalizeForDedup(candidateTitle)
-            if (cleanCandidate.isBlank()) return false
+            val clean = normalizeForDedup(candidateTitle)
+            if (clean.isBlank()) return false
             return historyTitlesClean.any {
-                it == cleanCandidate || (cleanCandidate.length > 4 && (it.contains(cleanCandidate) || cleanCandidate.contains(
-                    it
-                )))
+                it == clean || (clean.length > 4 && (it.contains(clean) || clean.contains(it)))
             }
         }
 
-        val recs = backends.getRecommendations(currentTrack)
+        val recs = engine.getRecommendations(currentTrack)
         val validRec = recs.firstOrNull { r ->
             queue.none { it.id == r.id } && !isDuplicate(r.title)
         }
@@ -138,13 +133,13 @@ fun Route.searchRoutes(backends: BackendManager) {
 
     get("/api/artist/{name}") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
-        val info = backends.getArtistInfo(name)
+        val info = engine.getArtistInfo(name)
         if (info != null) call.respond(info) else call.respond(HttpStatusCode.NotFound)
     }
 
     get("/api/artist/{name}/albums") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
-        val albums = backends.getArtistAlbums(name)
+        val albums = engine.getArtistAlbums(name)
             .distinctBy { it.title.lowercase().replace(Regex("[^a-z]"), "") }
         call.respond(albums)
     }
@@ -152,7 +147,6 @@ fun Route.searchRoutes(backends: BackendManager) {
     get("/api/artist/{name}/tracks") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
         val providersParamRaw = call.request.queryParameters["providers"]
-        val preferred = providersParamRaw?.lowercase()?.split(",")?.firstOrNull { it.isNotEmpty() }
 
         val cacheKey = "artist_tracks:$name"
         val cached = SearchCache.get(cacheKey, providersParamRaw)
@@ -163,24 +157,21 @@ fun Route.searchRoutes(backends: BackendManager) {
 
         val targetArtistClean = name.lowercase().replace(Regex("[^a-z0-9]"), "")
 
-        val tracks = backends.search(name, preferred)
+        val tracks = engine.searchTracks(name)
             .filter { it.artworkUrl != null }
             .filter { track ->
                 track.artists.any { it.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistClean } ||
                         track.artist.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistClean
             }
-            .groupBy { normalizeForDedup(it.title) }
-            .values
-            .map { group -> group.maxByOrNull { it.artists.size } ?: group.first() }
+            .distinctBy { normalizeForDedup(it.title) }
 
         SearchCache.put(cacheKey, providersParamRaw, SearchResponse(tracks, emptyList()))
-
         call.respond(tracks)
     }
 
     get("/api/album/{id}") {
         val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
-        val album = backends.getAlbum(id)
+        val album = engine.getAlbum(id)
         if (album != null) call.respond(album) else call.respond(HttpStatusCode.NotFound)
     }
 }

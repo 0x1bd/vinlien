@@ -3,13 +3,16 @@ package org.kvxd.vinlien.backends.invidious
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import org.kvxd.vinlien.backends.AudioProvider
-import org.kvxd.vinlien.backends.MetadataProvider
+import org.kvxd.vinlien.backends.Capability
+import org.kvxd.vinlien.backends.MusicProvider
+import org.kvxd.vinlien.backends.Normalizer
 import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
 import org.kvxd.vinlien.shared.Track
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
+
+private val YT_ID_REGEX = Regex("^[a-zA-Z0-9_-]{11}$")
 
 @Serializable
 private data class InvidiousVideo(
@@ -26,7 +29,6 @@ private data class InvidiousVideo(
         val durationMs = (lengthSeconds ?: 0L) * 1000
         if (durationMs > 600_000L) return null
         val artist = author ?: "Unknown Artist"
-
         return Track(
             id = id,
             title = trackTitle,
@@ -53,82 +55,73 @@ private data class InvidiousStream(
     val url: String? = null
 )
 
-class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:3000") : MetadataProvider,
-    AudioProvider {
 
+class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:3000") : MusicProvider {
+    override val id = "invidious"
     override val name = "Invidious"
-    override val searchable = false
+    override val capabilities = setOf(Capability.RECOMMENDATIONS, Capability.AUDIO_STREAM)
+
     private val logger = LoggerFactory.getLogger(LocalInvidiousBackend::class.java)
 
     private fun api(path: String) = "$instanceUrl/api/v1/$path"
 
-    override suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
-        val jsonString = fetch(api("search?q=${query.encoded}&type=video"))
-        val videos = sharedJson.decodeFromString<List<InvidiousVideo>>(jsonString)
-        videos.mapNotNull { it.toTrack() }
+    private suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
+        sharedJson.decodeFromString<List<InvidiousVideo>>(
+            fetch(api("search?q=${URLEncoder.encode(query, "UTF-8")}&type=video"))
+        ).mapNotNull { it.toTrack() }
     }
 
     override suspend fun searchAudio(query: String): List<Track> = search(query)
 
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        val jsonString = fetch(api("videos/${resolveVideoId(track)}"))
-        val details = sharedJson.decodeFromString<InvidiousVideoDetails>(jsonString)
-        details.recommendedVideos.mapNotNull { it.toTrack() }
-    }
-
-    override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
-        val jsonString = fetch(api("search?q=${"pop hits".encoded}&type=video"))
-        val videos = sharedJson.decodeFromString<List<InvidiousVideo>>(jsonString)
-        videos.mapNotNull { it.toTrack() }.take(6)
-    }
-
-    override suspend fun getStreamUrl(track: Track): String = withContext(Dispatchers.IO) {
-        if (track.id.matches(Regex("^[a-zA-Z0-9_-]{11}$"))) {
-            return@withContext fetchAudioFromId(track.id)
-        }
-
-        val scrapedId = scrapeLastFmVideoId(track)
-        if (scrapedId != null) {
-            return@withContext fetchAudioFromId(scrapedId)
-        }
-
-        throw Exception("Not a native Invidious ID and Last.fm scrape failed.")
-    }
-
-    private suspend fun fetchAudioFromId(id: String): String {
-        val jsonString = fetch(api("videos/$id"))
-        val video = sharedJson.decodeFromString<InvidiousVideoDetails>(jsonString)
-
-        if (video.error != null) {
-            throw Exception("Invidious returned error for $id: ${video.error}")
-        }
-
-        val streams = video.adaptiveFormats + video.formatStreams
-        val audio = streams.firstOrNull { it.itag == "140" }
-            ?: streams.firstOrNull { it.type?.startsWith("audio/") == true }
-            ?: throw Exception("No audio stream found for video ID $id")
-
-        return audio.url ?: throw Exception("No URL in audio stream for $id")
-    }
-
-    private suspend fun resolveVideoId(track: Track): String {
-        if (track.id.matches(Regex("^[a-zA-Z0-9_-]{11}$"))) return track.id
-        return scrapeLastFmVideoId(track) ?: throw Exception("Could not resolve video ID for ${track.title}")
-    }
-
-    suspend fun streamFromLastFm(track: Track): String? = withContext(Dispatchers.IO) {
         try {
-            val id = scrapeLastFmVideoId(track) ?: return@withContext null
-            fetchAudioFromId(id)
+            val videoId: String = when {
+                track.id.matches(YT_ID_REGEX) -> track.id
+                else -> {
+                    val primaryArtist = Normalizer.primaryArtist(track)
+                    search("$primaryArtist ${track.title}").firstOrNull()?.id
+                        ?: return@withContext emptyList()
+                }
+            }
+            sharedJson.decodeFromString<InvidiousVideoDetails>(fetch(api("videos/$videoId")))
+                .recommendedVideos.mapNotNull { it.toTrack() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    override suspend fun resolveStream(track: Track): String? = withContext(Dispatchers.IO) {
+        try {
+            when {
+                track.id.matches(YT_ID_REGEX) -> fetchAudioFromId(track.id)
+                else -> scrapeLastFmVideoId(track)?.let { fetchAudioFromId(it) }
+            }
         } catch (e: Exception) {
             null
         }
     }
 
+    private suspend fun fetchAudioFromId(id: String): String {
+        val video = sharedJson.decodeFromString<InvidiousVideoDetails>(fetch(api("videos/$id")))
+        if (video.error != null) throw Exception("Invidious returned error for $id: ${video.error}")
+        val streams = video.adaptiveFormats + video.formatStreams
+        val audio = streams.firstOrNull { it.itag == "140" }
+            ?: streams.firstOrNull { it.type?.startsWith("audio/") == true }
+            ?: throw Exception("No audio stream found for $id")
+        return audio.url ?: throw Exception("No URL in audio stream for $id")
+    }
+
     private suspend fun scrapeLastFmVideoId(track: Track): String? {
         val urls = buildList {
             track.lastFmUrl?.let { add(it) }
-            add("https://www.last.fm/music/${track.artist.encoded}/_/${track.title.encoded}")
+            add(
+                "https://www.last.fm/music/${
+                    URLEncoder.encode(
+                        track.artist,
+                        "UTF-8"
+                    )
+                }/_/${URLEncoder.encode(track.title, "UTF-8")}"
+            )
         }.distinct()
 
         for (url in urls) {
@@ -148,7 +141,8 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
                     Regex("""data-youtube-id="([a-zA-Z0-9_-]{11})"""")
                 ).firstNotNullOfOrNull { it.find(html)?.groupValues?.get(1) }
                 if (id != null) {
-                    logger.debug("Last.fm scrape OK '${track.artist} - ${track.title}': $id"); return id
+                    logger.debug("Last.fm scrape OK '${track.artist} - ${track.title}': $id")
+                    return id
                 }
             } catch (e: Exception) {
                 logger.warn("Last.fm scrape failed for $url: ${e.message}")
@@ -156,6 +150,4 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
         }
         return null
     }
-
-    private val String.encoded get() = URLEncoder.encode(this, "UTF-8")
 }

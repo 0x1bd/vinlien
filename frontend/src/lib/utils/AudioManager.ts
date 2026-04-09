@@ -7,7 +7,6 @@ import {
     volume,
     isMuted,
     repeatMode,
-    audioProvidersOrder,
     user,
     silenceSkip,
     silenceSkipThreshold
@@ -44,7 +43,8 @@ class AudioManager {
 
         this.audio.addEventListener('play', () => {
             if (this.audioContext?.state === 'suspended') {
-                this.audioContext.resume().catch(() => {});
+                this.audioContext.resume().catch(() => {
+                });
             }
         });
 
@@ -82,7 +82,8 @@ class AudioManager {
         this.audio.addEventListener('ended', () => this.playNext());
 
         isPlaying.subscribe(play => {
-            if (play && this.audio.src) this.audio.play().catch(() => {});
+            if (play && this.audio.src) this.audio.play().catch(() => {
+            });
             else this.audio.pause();
         });
 
@@ -96,19 +97,20 @@ class AudioManager {
 
                 const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
                 if (currentSrcId === track.id && this.audio.readyState > 0) {
-                    if (get(isPlaying)) this.audio.play().catch(() => {});
+                    if (get(isPlaying)) this.audio.play().catch(() => {
+                    });
                     return;
                 }
 
                 apiRequest('/api/history', {method: 'POST', body: track})
                     .catch(e => console.error("Failed to record history", e));
 
-                const providers = encodeURIComponent(get(audioProvidersOrder).join(','));
                 const streamUrlParam = track.streamUrl ? `&streamUrl=${encodeURIComponent(track.streamUrl)}` : '';
-                this.audio.src = `/api/stream?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&durationMs=${track.durationMs}${streamUrlParam}&providers=${providers}`;
+                this.audio.src = `/api/stream?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&durationMs=${track.durationMs}${streamUrlParam}`;
                 this.audio.load();
 
-                if (get(isPlaying)) this.audio.play().catch(() => {});
+                if (get(isPlaying)) this.audio.play().catch(() => {
+                });
 
                 if ('mediaSession' in navigator) {
                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -189,9 +191,8 @@ class AudioManager {
 
         if (nextTrack && this.preloadedTrackId !== nextTrack.id) {
             this.preloadedTrackId = nextTrack.id;
-            const providers = encodeURIComponent(get(audioProvidersOrder).join(','));
             const streamUrlParam = nextTrack.streamUrl ? `&streamUrl=${encodeURIComponent(nextTrack.streamUrl)}` : '';
-            this.preloadAudio.src = `/api/stream?id=${encodeURIComponent(nextTrack.id)}&title=${encodeURIComponent(nextTrack.title)}&artist=${encodeURIComponent(nextTrack.artist)}&durationMs=${nextTrack.durationMs}${streamUrlParam}&providers=${providers}`;
+            this.preloadAudio.src = `/api/stream?id=${encodeURIComponent(nextTrack.id)}&title=${encodeURIComponent(nextTrack.title)}&artist=${encodeURIComponent(nextTrack.artist)}&durationMs=${nextTrack.durationMs}${streamUrlParam}`;
             this.preloadAudio.load();
         }
     }
@@ -205,7 +206,8 @@ class AudioManager {
 
         if (rm === 2 && !force) {
             this.audio.currentTime = 0;
-            this.audio.play().catch(() => {});
+            this.audio.play().catch(() => {
+            });
             return;
         }
 

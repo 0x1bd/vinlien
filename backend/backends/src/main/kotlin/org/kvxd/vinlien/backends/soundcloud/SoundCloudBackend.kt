@@ -5,8 +5,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import org.kvxd.vinlien.backends.AudioProvider
-import org.kvxd.vinlien.backends.MetadataProvider
+import org.kvxd.vinlien.backends.Capability
+import org.kvxd.vinlien.backends.MusicProvider
+import org.kvxd.vinlien.backends.Normalizer
 import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
 import org.kvxd.vinlien.shared.Track
@@ -14,19 +15,13 @@ import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 
 @Serializable
-private data class ScSearchResponse(
-    val collection: List<ScTrack> = emptyList()
-)
+private data class ScSearchResponse(val collection: List<ScTrack> = emptyList())
 
 @Serializable
-private data class ScTrendingResponse(
-    val collection: List<ScTrendingItem> = emptyList()
-)
+private data class ScTrendingResponse(val collection: List<ScTrendingItem> = emptyList())
 
 @Serializable
-private data class ScTrendingItem(
-    val track: ScTrack? = null
-)
+private data class ScTrendingItem(val track: ScTrack? = null)
 
 @Serializable
 private data class ScTrack(
@@ -68,15 +63,10 @@ private data class ScTrack(
 }
 
 @Serializable
-private data class ScUser(
-    val username: String? = null,
-    val avatar_url: String? = null
-)
+private data class ScUser(val username: String? = null, val avatar_url: String? = null)
 
 @Serializable
-private data class ScMedia(
-    val transcodings: List<ScTranscoding> = emptyList()
-)
+private data class ScMedia(val transcodings: List<ScTranscoding> = emptyList())
 
 @Serializable
 private data class ScTranscoding(
@@ -86,19 +76,18 @@ private data class ScTranscoding(
 )
 
 @Serializable
-private data class ScFormat(
-    val protocol: String? = null
-)
+private data class ScFormat(val protocol: String? = null)
 
 @Serializable
-private data class ScStreamResponse(
-    val url: String? = null
-)
+private data class ScStreamResponse(val url: String? = null)
 
-class SoundCloudBackend : MetadataProvider, AudioProvider {
+
+class SoundCloudBackend : MusicProvider {
+    override val id = "sc"
     override val name = "SoundCloud"
-    private val logger = LoggerFactory.getLogger(SoundCloudBackend::class.java)
+    override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, Capability.RECOMMENDATIONS, Capability.AUDIO_STREAM)
 
+    private val logger = LoggerFactory.getLogger(SoundCloudBackend::class.java)
     private var clientId: String? = null
     private val mutex = Mutex()
 
@@ -124,43 +113,64 @@ class SoundCloudBackend : MetadataProvider, AudioProvider {
         return "1r2g3h4j5k6l7m8n9o0p"
     }
 
-    override suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
+    override suspend fun searchTracks(query: String): List<Track> = withContext(Dispatchers.IO) {
         try {
-            val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val jsonString =
-                fetch("https://api-v2.soundcloud.com/search/tracks?q=$encodedQuery&client_id=${getClientId()}&limit=15")
-            val res = sharedJson.decodeFromString<ScSearchResponse>(jsonString)
-            res.collection.mapNotNull { it.toDomainTrack() }
+            val encoded = URLEncoder.encode(query, "UTF-8")
+            sharedJson.decodeFromString<ScSearchResponse>(
+                fetch("https://api-v2.soundcloud.com/search/tracks?q=$encoded&client_id=${getClientId()}&limit=15")
+            ).collection.mapNotNull { it.toDomainTrack() }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    override suspend fun searchAudio(query: String): List<Track> = search(query)
+    override suspend fun searchAudio(query: String): List<Track> = searchTracks(query)
 
-    override suspend fun getRecommendations(track: Track): List<Track> = emptyList()
+    override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
+        try {
+            val scId: String = when {
+                track.id.startsWith("sc:") -> track.id.removePrefix("sc:")
+                else -> {
+                    val primaryArtist = Normalizer.primaryArtist(track)
+                    val encoded = URLEncoder.encode("$primaryArtist ${track.title}", "UTF-8")
+                    val results = sharedJson.decodeFromString<ScSearchResponse>(
+                        fetch("https://api-v2.soundcloud.com/search/tracks?q=$encoded&client_id=${getClientId()}&limit=5")
+                    ).collection
+                    val match = results.firstOrNull { t ->
+                        val tTitle = t.title?.lowercase() ?: ""
+                        val wantTitle = track.title.lowercase()
+                        tTitle.contains(wantTitle) || wantTitle.contains(tTitle)
+                    } ?: results.firstOrNull()
+                    match?.id?.toString() ?: return@withContext emptyList()
+                }
+            }
+            sharedJson.decodeFromString<ScSearchResponse>(
+                fetch("https://api-v2.soundcloud.com/tracks/$scId/related?client_id=${getClientId()}&limit=10")
+            ).collection.mapNotNull { it.toDomainTrack() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
         try {
-            val jsonString =
+            sharedJson.decodeFromString<ScTrendingResponse>(
                 fetch("https://api-v2.soundcloud.com/charts?kind=trending&genre=soundcloud:genres:all-music&client_id=${getClientId()}&limit=10")
-            val res = sharedJson.decodeFromString<ScTrendingResponse>(jsonString)
-            res.collection.mapNotNull { it.track?.toDomainTrack() }
+            ).collection.mapNotNull { it.track?.toDomainTrack() }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    override suspend fun getStreamUrl(track: Track): String = withContext(Dispatchers.IO) {
-        if (track.id.startsWith("sc:") && track.streamUrl != null) {
-            return@withContext fetchDirectStream(track.streamUrl!!)
+    override suspend fun resolveStream(track: Track): String? = withContext(Dispatchers.IO) {
+        try {
+            if (!track.id.startsWith("sc:") || track.streamUrl == null) return@withContext null
+            val res = sharedJson.decodeFromString<ScStreamResponse>(
+                fetch("${track.streamUrl}?client_id=${getClientId()}")
+            )
+            res.url
+        } catch (e: Exception) {
+            null
         }
-        throw Exception("Not a native SoundCloud ID or missing streamUrl")
-    }
-
-    private suspend fun fetchDirectStream(streamUrl: String): String {
-        val jsonString = fetch("$streamUrl?client_id=${getClientId()}")
-        val res = sharedJson.decodeFromString<ScStreamResponse>(jsonString)
-        return res.url ?: throw Exception("No media url found in stream JSON")
     }
 }

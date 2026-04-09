@@ -1,45 +1,5 @@
 <script lang="ts">
-    import {showVolumeSlider, metaProvidersOrder, audioProvidersOrder, silenceSkip, silenceSkipThreshold} from '$lib/utils/store';
-    import {apiRequest} from '$lib/utils/api';
-    import {onMount} from 'svelte';
-    import type {Writable} from 'svelte/store';
-
-    onMount(async () => {
-        try {
-            const res = await apiRequest('/api/providers');
-
-            const newMeta = res.metadata.filter((p: string) => !$metaProvidersOrder.includes(p));
-            $metaProvidersOrder = [...$metaProvidersOrder, ...newMeta].filter((p: string) => res.metadata.includes(p));
-
-            const newAudio = res.audio.filter((p: string) => !$audioProvidersOrder.includes(p));
-            $audioProvidersOrder = [...$audioProvidersOrder, ...newAudio].filter((p: string) => res.audio.includes(p));
-
-        } catch (e) {
-        }
-    });
-
-    function moveUp(store: Writable<string[]>, index: number) {
-        if (index === 0) return;
-        store.update(list => {
-            const temp = list[index - 1];
-            list[index - 1] = list[index];
-            list[index] = temp;
-            return list;
-        });
-    }
-
-    function moveDown(store: Writable<string[]>, index: number) {
-        let maxIdx = 0;
-        store.subscribe(v => maxIdx = v.length - 1)();
-        if (index === maxIdx) return;
-
-        store.update(list => {
-            const temp = list[index + 1];
-            list[index + 1] = list[index];
-            list[index] = temp;
-            return list;
-        });
-    }
+    import {showVolumeSlider, silenceSkip, silenceSkipThreshold} from '$lib/utils/store';
 </script>
 
 <div class="header">
@@ -64,9 +24,13 @@
             <h3>Silence Skip</h3>
             {#if $silenceSkip}
                 <p>Skipping after
-                    <button class="threshold-btn" on:click={() => $silenceSkipThreshold = Math.max(1, $silenceSkipThreshold - 1)}>−</button>
+                    <button class="threshold-btn"
+                            on:click={() => $silenceSkipThreshold = Math.max(1, $silenceSkipThreshold - 1)}>−
+                    </button>
                     <span class="threshold-val">{$silenceSkipThreshold}</span>
-                    <button class="threshold-btn" on:click={() => $silenceSkipThreshold = Math.min(10, $silenceSkipThreshold + 1)}>+</button>
+                    <button class="threshold-btn"
+                            on:click={() => $silenceSkipThreshold = Math.min(10, $silenceSkipThreshold + 1)}>+
+                    </button>
                     s of silence.
                 </p>
             {:else}
@@ -79,65 +43,6 @@
         </label>
     </div>
 
-    <div class="setting-item column-layout">
-        <div class="info">
-            <h3>Metadata Provider Priority</h3>
-            <p>Arrange the services in order of preference for search results.</p>
-        </div>
-
-        <div class="priority-list">
-            {#each $metaProvidersOrder as p, i}
-                <div class="priority-row">
-                    <span class="p-name">{i + 1}. {p}</span>
-                    <div class="controls">
-                        <button class="icon-btn" disabled={i === 0} on:click={() => moveUp(metaProvidersOrder, i)}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2">
-                                <polyline points="18 15 12 9 6 15"></polyline>
-                            </svg>
-                        </button>
-                        <button class="icon-btn" disabled={i === $metaProvidersOrder.length - 1}
-                                on:click={() => moveDown(metaProvidersOrder, i)}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            {/each}
-        </div>
-    </div>
-
-    <div class="setting-item column-layout">
-        <div class="info">
-            <h3>Audio Stream Priority</h3>
-            <p>Arrange the services in order of preference for fetching audio streams.</p>
-        </div>
-
-        <div class="priority-list">
-            {#each $audioProvidersOrder as p, i}
-                <div class="priority-row">
-                    <span class="p-name">{i + 1}. {p}</span>
-                    <div class="controls">
-                        <button class="icon-btn" disabled={i === 0} on:click={() => moveUp(audioProvidersOrder, i)}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2">
-                                <polyline points="18 15 12 9 6 15"></polyline>
-                            </svg>
-                        </button>
-                        <button class="icon-btn" disabled={i === $audioProvidersOrder.length - 1}
-                                on:click={() => moveDown(audioProvidersOrder, i)}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            {/each}
-        </div>
-    </div>
 </div>
 
 <style>
@@ -159,11 +64,6 @@
         gap: 24px;
     }
 
-    .setting-item.column-layout {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
     .info h3 {
         font-size: 16px;
         color: var(--text-primary);
@@ -175,54 +75,6 @@
         font-size: 14px;
         color: var(--text-secondary);
         line-height: 1.4;
-    }
-
-    .priority-list {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
-    .priority-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 16px;
-        border-bottom: 1px solid var(--border-subtle);
-        background: var(--bg-elevated);
-    }
-
-    .priority-row:last-child {
-        border-bottom: none;
-    }
-
-    .p-name {
-        font-size: 14px;
-        font-weight: 500;
-    }
-
-    .controls {
-        display: flex;
-        gap: 4px;
-    }
-
-    .controls button {
-        padding: 6px;
-        color: var(--text-secondary);
-    }
-
-    .controls button:hover:not(:disabled) {
-        color: var(--text-primary);
-        background: var(--bg-hover);
-    }
-
-    .controls button:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
     }
 
     .threshold-btn {
@@ -300,7 +152,7 @@
     }
 
     @media (max-width: 768px) {
-        .setting-item:not(.column-layout) {
+        .setting-item {
             flex-direction: column;
             align-items: flex-start;
         }

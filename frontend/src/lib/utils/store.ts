@@ -51,9 +51,6 @@ export const showVolumeSlider = createPersistedStore<boolean>('vinlien_showVolum
 export const showQueuePanel = writable(false);
 export const trackToAdd = writable<Track | null>(null);
 
-export const audioProvidersOrder = createPersistedStore<string[]>('vinlien_audioProvidersOrder', []);
-export const metaProvidersOrder = createPersistedStore<string[]>('vinlien_metaProvidersOrder', []);
-
 export const silenceSkip = createPersistedStore<boolean>('vinlien_silenceSkip', false);
 export const silenceSkipThreshold = createPersistedStore<number>('vinlien_silenceSkipThreshold', 2);
 

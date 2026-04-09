@@ -1,6 +1,6 @@
 <script lang="ts">
     import {page} from '$app/stores';
-    import {queue, currentTrackIndex, isPlaying, metaProvidersOrder} from '$lib/utils/store';
+    import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import TrackRow from '$lib/components/TrackRow.svelte';
     import AlbumCard from '$lib/components/AlbumCard.svelte';
@@ -12,7 +12,6 @@
     let albums: Album[] = [];
     let artistInfo: ArtistInfo | null = null;
 
-    // Albums whose title matches a top track title are singles
     $: filteredAlbums = albums.filter(album =>
         !tracks.some(t =>
             t.title.toLowerCase() === album.title.toLowerCase() &&
@@ -24,10 +23,9 @@
 
     $: if (artistName) {
         isLoading = true;
-        const providers = encodeURIComponent($metaProvidersOrder.join(','));
 
         Promise.all([
-            apiRequest(`/api/artist/${encodeURIComponent(artistName)}/tracks?providers=${providers}`).then((res: Track[]) => {
+            apiRequest(`/api/artist/${encodeURIComponent(artistName)}/tracks`).then((res: Track[]) => {
                 tracks = res;
             }).catch(() => tracks = []),
 

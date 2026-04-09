@@ -16,7 +16,8 @@ import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.request.path
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.kvxd.vinlien.backends.BackendManager
+import org.kvxd.vinlien.backends.AggregationEngine
+import org.kvxd.vinlien.backends.Capability
 import org.kvxd.vinlien.backends.invidious.LocalInvidiousBackend
 import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
@@ -65,43 +66,36 @@ fun Application.module() {
         }
     }
 
-    val invidious = LocalInvidiousBackend(Config.data.invidiousUrl)
-    val soundcloud = SoundCloudBackend()
-    val itunes = ItunesMetadataProvider()
-
-    val metadataProviders = buildList {
-        if (Config.data.lastFmApiKey.isNotBlank()) add(
-            LastFmMetadataProvider(
-                Config.data.lastFmApiKey,
-                itunes::fetchCover,
-                Config.data.lastFmUsername
-            )
-        )
-        add(soundcloud)
-        add(itunes)
+    val providers = buildList {
+        if (Config.data.lastFmApiKey.isNotBlank()) {
+            add(LastFmMetadataProvider(Config.data.lastFmApiKey, Config.data.lastFmUsername))
+        }
+        add(ItunesMetadataProvider())
         add(MusicBrainzMetadataProvider())
-        add(invidious)
+        add(SoundCloudBackend())
+        add(LocalInvidiousBackend(Config.data.invidiousUrl))
     }
 
-    val audioProviders = listOf(soundcloud, invidious)
-
-    val backendManager = BackendManager(metadataProviders, audioProviders)
+    val engine = AggregationEngine(providers)
 
     routing {
         authRoutes(Config.data.jwtSecret)
 
         get("/api/providers") {
-            call.respond(
-                mapOf(
-                    "metadata" to metadataProviders.map { it.name },
-                    "audio" to audioProviders.map { it.name }
-                ))
+            call.respond(mapOf(
+                "metadata" to providers
+                    .filter { p -> p.capabilities.any { it != Capability.AUDIO_STREAM } }
+                    .map { it.name },
+                "audio" to providers
+                    .filter { Capability.AUDIO_STREAM in it.capabilities }
+                    .map { it.name }
+            ))
         }
 
         authenticate("auth-jwt") {
-            searchRoutes(backendManager)
-            streamRoutes(backendManager)
-            feedRoutes(backendManager)
+            searchRoutes(engine)
+            streamRoutes(engine)
+            feedRoutes(engine)
             adminRoutes()
             playlistRoutes()
         }

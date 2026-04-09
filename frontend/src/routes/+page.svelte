@@ -2,7 +2,7 @@
     import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {apiRequest} from '$lib/utils/api';
-    import {queue, currentTrackIndex, isPlaying, metaProvidersOrder} from '$lib/utils/store';
+    import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
     import type {Track, HomeFeed, SearchResponse} from '$lib/utils/types';
     import TrackCard from '$lib/components/TrackCard.svelte';
     import TrackRow from '$lib/components/TrackRow.svelte';
@@ -34,8 +34,7 @@
         isSearching = true;
 
         timeout = setTimeout(async () => {
-            const providers = encodeURIComponent($metaProvidersOrder.join(','));
-            searchResults = await apiRequest(`/api/search?q=${encodeURIComponent(query)}&providers=${providers}`);
+            searchResults = await apiRequest(`/api/search?q=${encodeURIComponent(query)}`);
 
             uniqueArtists = Array.from(new Set([
                 ...searchResults.tracks.flatMap((t: any) => t.artists as string[]),

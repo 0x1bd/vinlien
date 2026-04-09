@@ -15,6 +15,7 @@
     import {audioManager, audioProgress, currentTimeDisplay, durationDisplay} from '$lib/utils/AudioManager';
     import QueuePanel from './QueuePanel.svelte';
     import {goto} from '$app/navigation';
+    import ArtworkImage from './ArtworkImage.svelte';
 
     $: likedPlaylist = $userPlaylists.find(p => p.name === 'Liked Songs');
     $: dislikedPlaylist = $userPlaylists.find(p => p.name === 'Disliked Songs');
@@ -124,7 +125,11 @@
 
             <div class="controls-area">
                 <div class="data-group">
-                    <img src={$currentTrack.artworkUrl} alt="Art">
+                    <div class="artwork">
+                        <ArtworkImage src={$currentTrack.artworkUrl} seed={$currentTrack.artist + $currentTrack.title}>
+                            {($currentTrack.title[0] ?? '?').toUpperCase()}
+                        </ArtworkImage>
+                    </div>
                     <div class="data-row">
                         <div class="metadata">
                             <div class="title">{$currentTrack.title}</div>
@@ -371,10 +376,14 @@
         width: 30%;
     }
 
-    .data-group img {
+    .data-group .artwork {
         width: 56px;
         height: 56px;
         border-radius: 4px;
+        flex-shrink: 0;
+        font-size: 20px;
+        font-weight: 800;
+        color: rgba(255,255,255,0.9);
     }
 
     .data-row {
@@ -704,7 +713,7 @@
             gap: 8px;
         }
 
-        .player-wrapper:not(.expanded) .data-group img {
+        .player-wrapper:not(.expanded) .data-group .artwork {
             width: 44px;
             height: 44px;
         }
@@ -820,13 +829,14 @@
             margin-bottom: auto;
         }
 
-        .player-wrapper.expanded .data-group img {
+        .player-wrapper.expanded .data-group .artwork {
             width: 100%;
             max-width: 360px;
             height: auto;
             aspect-ratio: 1;
             border-radius: 12px;
             box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
+            font-size: 72px;
         }
 
         .player-wrapper.expanded .data-row {

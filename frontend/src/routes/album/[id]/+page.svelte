@@ -3,6 +3,7 @@
     import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import TrackRow from '$lib/components/TrackRow.svelte';
+    import ArtworkImage from '$lib/components/ArtworkImage.svelte';
     import type {Album} from '$lib/utils/types';
 
     let album: Album | null = null;
@@ -11,16 +12,20 @@
         apiRequest(`/api/album/${encodeURIComponent($page.params.id)}`).then(res => album = res);
     }
 
+    function withArt(track: any) {
+        return {...track, artworkUrl: track.artworkUrl || album?.artworkUrl};
+    }
+
     function playAll() {
         if (!album?.tracks.length) return;
-        $queue = [...album.tracks];
+        $queue = album.tracks.map(withArt);
         $currentTrackIndex = 0;
         $isPlaying = true;
     }
 
     function playTrackAtIndex(index: number) {
         if (!album) return;
-        $queue = [album.tracks[index]];
+        $queue = [withArt(album.tracks[index])];
         $currentTrackIndex = 0;
         $isPlaying = true;
     }
@@ -28,7 +33,9 @@
 
 {#if album}
     <div class="album-header">
-        <img src={album.artworkUrl} alt="Album Art" class="album-art"/>
+        <div class="album-art-wrap">
+            <ArtworkImage src={album.artworkUrl} seed={album.artist + album.title}/>
+        </div>
         <div class="album-meta">
             <span class="type-badge">Album</span>
             <h2 class="page-title">{album.title}</h2>
@@ -45,7 +52,8 @@
 
     <div class="track-list">
         {#each album.tracks as track, i}
-            <TrackRow {track} onPlay={() => playTrackAtIndex(i)}/>
+            <TrackRow track={{...track, artworkUrl: track.artworkUrl || album.artworkUrl}}
+                      onPlay={() => playTrackAtIndex(i)}/>
         {/each}
     </div>
 {:else}
@@ -60,12 +68,12 @@
         margin-bottom: 48px;
     }
 
-    .album-art {
+    .album-art-wrap {
         width: 200px;
         height: 200px;
         border-radius: 8px;
         box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
-        object-fit: cover;
+        flex-shrink: 0;
     }
 
     .album-meta {

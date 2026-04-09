@@ -3,7 +3,23 @@ package org.kvxd.vinlien.backends
 import org.kvxd.vinlien.shared.Album
 import org.kvxd.vinlien.shared.Track
 
+private val ARTIST_SPLIT = Regex(
+    """[\s]*[&,][\s]*|[\s]+(feat|ft|featuring)\.?\s+""",
+    RegexOption.IGNORE_CASE
+)
+
 object Normalizer {
+
+    /**
+     * Extract the primary/lead artist from a track.
+     * Prefers [Track.artists] (already split), falls back to splitting [Track.artist] on
+     * "&", ",", "feat", etc. Never exposes the full concatenated string to API calls.
+     */
+    fun primaryArtist(track: Track): String =
+        track.artists.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: track.artist.split(ARTIST_SPLIT).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: track.artist
+
 
     private val FEAT_IN_TITLE = Regex(
         """[\s\-]*[\[(]?\s*(?:feat|ft|featuring)\.?\s+([^()\[\]\r\n]+?)[\])]?\s*$""",

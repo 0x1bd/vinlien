@@ -8,7 +8,7 @@ import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
-import org.kvxd.vinlien.backends.BackendManager
+import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.shared.Track
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -18,7 +18,7 @@ private val proxyClient = HttpClient(CIO) {
     followRedirects = true
 }
 
-fun Route.streamRoutes(backends: BackendManager) {
+fun Route.streamRoutes(engine: AggregationEngine) {
     val logger = LoggerFactory.getLogger("StreamRoutes")
 
     get("/api/stream") {
@@ -36,8 +36,7 @@ fun Route.streamRoutes(backends: BackendManager) {
         }
 
         val track = Track(id = id, artist = artist, title = title, durationMs = durationMs, streamUrl = streamUrl)
-
-        val urlOrPath = runCatching { backends.getStreamUrl(track, preferred) }.getOrNull()
+        val urlOrPath = runCatching { engine.resolveStream(track, preferred) }.getOrNull()
 
         if (urlOrPath == null) {
             logger.error("All providers failed to stream track '{} - {}' (ID: {})", artist, title, id)

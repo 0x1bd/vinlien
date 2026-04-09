@@ -7,7 +7,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
-import org.kvxd.vinlien.backends.BackendManager
+import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.server.DatabaseFactory.toTrack
@@ -36,7 +36,7 @@ object TrendingCache {
     }
 }
 
-fun Route.feedRoutes(backends: BackendManager) {
+fun Route.feedRoutes(engine: AggregationEngine) {
     post("/api/history") {
         val track = call.receive<Track>()
         val userId = call.principal<JWTPrincipal>()?.payload?.getClaim("id")?.asString()
@@ -81,7 +81,7 @@ fun Route.feedRoutes(backends: BackendManager) {
         val cache = TrendingCache.getValidCache()
         if (cache != null) return@get call.respond(cache)
 
-        val trending = backends.getTrending()
+        val trending = engine.getTrending()
         if (trending.isNotEmpty()) {
             TrendingCache.updateCache(trending)
             call.respond(trending)

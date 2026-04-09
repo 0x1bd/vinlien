@@ -2,6 +2,7 @@
     import {goto} from '$app/navigation';
     import {trackToAdd} from '$lib/utils/store';
     import type {Track} from '$lib/utils/types';
+    import ArtworkImage from './ArtworkImage.svelte';
 
     export let track: Track;
     export let onPlay: () => void;
@@ -17,11 +18,17 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="track-row" on:click={onPlay}>
-    <img src={track.artworkUrl} alt="art">
+    <div class="artwork">
+        <ArtworkImage src={track.artworkUrl} seed={track.artist + track.title}/>
+    </div>
     <div class="info">
         <div class="title">{track.title}</div>
         <div class="artist">
-            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>{#if i < track.artists.length - 1}{' & '}{/if}{/each}
+            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events -->
+                <!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link"
+                                                                                on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>
+                {#if i < track.artists.length - 1}{' & '}{/if}
+            {/each}
         </div>
     </div>
     {#if formatMs(track.durationMs)}
@@ -45,11 +52,11 @@
         background: var(--bg-hover);
     }
 
-    img {
+    .artwork {
         width: 40px;
         height: 40px;
         border-radius: 4px;
-        object-fit: cover;
+        flex-shrink: 0;
     }
 
     .info {
