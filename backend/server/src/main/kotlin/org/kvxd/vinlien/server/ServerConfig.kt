@@ -21,7 +21,8 @@ data class ServerConfig(
     val dbUrl: String = "jdbc:postgresql://localhost:5432/invidious",
     val dbUser: String = "invidious",
     val dbPass: String = "invidious",
-    val invidiousUrl: String = "http://localhost:3000"
+    val invidiousUrl: String = "http://localhost:3000",
+    val allowedOrigins: List<String> = emptyList()
 )
 
 object Config {
@@ -54,6 +55,8 @@ object Config {
         System.getenv("DB_USER")?.takeIf { it.isNotBlank() }?.let { data = data.copy(dbUser = it) }
         System.getenv("DB_PASSWORD")?.takeIf { it.isNotBlank() }?.let { data = data.copy(dbPass = it) }
         System.getenv("INVIDIOUS_URL")?.takeIf { it.isNotBlank() }?.let { data = data.copy(invidiousUrl = it) }
+        System.getenv("ALLOWED_ORIGINS")?.takeIf { it.isNotBlank() }
+            ?.let { data = data.copy(allowedOrigins = it.split(",").map(String::trim).filter(String::isNotEmpty)) }
 
         if (saveNeeded) {
             file.writeText(json.encodeToString(data))

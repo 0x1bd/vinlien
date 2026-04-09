@@ -41,6 +41,9 @@ fun Application.module() {
     install(CORS) {
         allowHost("localhost:5173")
         allowHost("127.0.0.1:5173")
+        Config.data.allowedOrigins.forEach { host ->
+            allowHost(host, schemes = listOf("http", "https"))
+        }
         allowCredentials = true
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
