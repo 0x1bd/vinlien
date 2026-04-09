@@ -85,7 +85,7 @@ private data class ScStreamResponse(val url: String? = null)
 class SoundCloudBackend : MusicProvider {
     override val id = "sc"
     override val name = "SoundCloud"
-    override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, Capability.RECOMMENDATIONS, Capability.AUDIO_STREAM)
+    override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, /*TODO: Capability.RECOMMENDATIONS,*/ Capability.AUDIO_STREAM)
 
     private val logger = LoggerFactory.getLogger(SoundCloudBackend::class.java)
     private var clientId: String? = null
@@ -126,6 +126,7 @@ class SoundCloudBackend : MusicProvider {
 
     override suspend fun searchAudio(query: String): List<Track> = searchTracks(query)
 
+    /* TODO: Figure out why soundcloud recommendations are often completely unrelated
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
         try {
             val scId: String = when {
@@ -151,6 +152,7 @@ class SoundCloudBackend : MusicProvider {
             emptyList()
         }
     }
+     */
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
         try {
