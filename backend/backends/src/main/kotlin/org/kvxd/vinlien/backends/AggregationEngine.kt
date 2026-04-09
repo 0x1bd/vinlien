@@ -56,7 +56,14 @@ class AggregationEngine(val providers: List<MusicProvider>) {
     }
 
     suspend fun getRecommendations(track: Track): List<Track> {
-        val raw = parallelQuery<List<Track>>(Capability.RECOMMENDATIONS) { it.getRecommendations(track) }.flatten()
+        val primary = parallelQuery<List<Track>>(Capability.RECOMMENDATIONS) { p ->
+            if (p.id == "itunes") null else p.getRecommendations(track)
+        }.flatten()
+        val raw = if (primary.isNotEmpty()) primary else {
+            parallelQuery<List<Track>>(Capability.RECOMMENDATIONS) { p ->
+                if (p.id == "itunes") p.getRecommendations(track) else null
+            }.flatten()
+        }
         return TrackMerger.merge(raw.map { Normalizer.track(it) })
     }
 
@@ -105,7 +112,7 @@ class AggregationEngine(val providers: List<MusicProvider>) {
     }
 
     private fun streamMatchScore(candidate: Track, target: Track): Int {
-        fun String.norm() = lowercase().replace(Regex("[^a-z0-9 ]"), "").trim().replace(Regex("\\s+"), " ")
+        fun String.norm() = lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim().replace(Regex("\\s+"), " ")
         fun String.noSpace() = replace(" ", "")
 
         val cTitle = candidate.title.norm()
@@ -183,7 +190,7 @@ class AggregationEngine(val providers: List<MusicProvider>) {
     }
 
     private fun fuzzyMatch(candidate: Track, target: Track): Boolean {
-        fun String.norm() = lowercase().replace(Regex("[^a-z0-9 ]"), "").trim().replace(Regex("\\s+"), " ")
+        fun String.norm() = lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim().replace(Regex("\\s+"), " ")
         fun String.noSpace() = replace(" ", "")
 
         val cTitle = candidate.title.norm()

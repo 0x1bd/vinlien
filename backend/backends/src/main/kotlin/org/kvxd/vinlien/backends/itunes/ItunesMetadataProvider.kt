@@ -141,7 +141,11 @@ class ItunesMetadataProvider : MusicProvider {
     }
 
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        searchTracks(track.artist).filter { it.canonicalId != track.canonicalId }
+        val artistCanonical = track.artist.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+        searchTracks(track.artist).filter { candidate ->
+            candidate.canonicalId != track.canonicalId &&
+                candidate.artist.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "").contains(artistCanonical)
+        }
     }
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {

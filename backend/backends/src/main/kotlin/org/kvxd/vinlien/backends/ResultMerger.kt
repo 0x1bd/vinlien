@@ -4,7 +4,7 @@ import org.kvxd.vinlien.shared.Album
 import org.kvxd.vinlien.shared.ArtistInfo
 import org.kvxd.vinlien.shared.Track
 
-private fun String.canonical() = lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+private fun String.canonical() = lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim()
 
 private fun String.primaryArtist(): String =
     split(Regex("""[\s]*[&,][\s]*|[\s]+(feat|ft|featuring)\.?\s+""", RegexOption.IGNORE_CASE))
@@ -96,7 +96,7 @@ object AlbumMerger {
         else -> null
     }
 
-    private fun String.canonical() = lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+    private fun String.canonical() = lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim()
 
     private fun mergeGroup(group: List<Album>): Album {
         val base = group.maxByOrNull { it.tracks.size } ?: group.first()
