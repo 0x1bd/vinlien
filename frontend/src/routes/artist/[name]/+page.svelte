@@ -27,8 +27,8 @@
         const providers = encodeURIComponent($metaProvidersOrder.join(','));
 
         Promise.all([
-            apiRequest(`/api/search?q=${encodeURIComponent(artistName)}&providers=${providers}`).then((raw: any) => {
-                tracks = raw.tracks.filter((t: Track) => t.artist.toLowerCase().includes(artistName.toLowerCase()) || t.title.toLowerCase().includes(artistName.toLowerCase()));
+            apiRequest(`/api/artist/${encodeURIComponent(artistName)}/tracks?providers=${providers}`).then((res: Track[]) => {
+                tracks = res;
             }).catch(() => tracks = []),
 
             apiRequest(`/api/artist/${encodeURIComponent(artistName)}`).then(info => {

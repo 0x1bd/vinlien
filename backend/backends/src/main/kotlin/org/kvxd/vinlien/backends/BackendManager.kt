@@ -192,11 +192,20 @@ class BackendManager(
 
         val candArtist = normalizeArtist(candidate.artist)
         val targArtist = normalizeArtist(target.artist)
+
+        val candArtistNoSpace = candArtist.replace(" ", "")
+        val targArtistNoSpace = targArtist.replace(" ", "")
+
         val artistMatch = candArtist == targArtist ||
                 candArtist.contains(targArtist) ||
-                targArtist.contains(candArtist)
+                targArtist.contains(candArtist) ||
+                candArtistNoSpace.contains(targArtistNoSpace) ||
+                targArtistNoSpace.contains(candArtistNoSpace)
 
-        return titleMatch && artistMatch
+        val candTitleNoSpace = candTitle.replace(" ", "")
+        val artistInTitle = candTitleNoSpace.contains(targArtistNoSpace)
+
+        return titleMatch && (artistMatch || artistInTitle)
     }
 
     private fun prefixFor(name: String): String = when (name.lowercase()) {

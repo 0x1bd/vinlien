@@ -149,6 +149,35 @@ fun Route.searchRoutes(backends: BackendManager) {
         call.respond(albums)
     }
 
+    get("/api/artist/{name}/tracks") {
+        val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        val providersParamRaw = call.request.queryParameters["providers"]
+        val preferred = providersParamRaw?.lowercase()?.split(",")?.firstOrNull { it.isNotEmpty() }
+
+        val cacheKey = "artist_tracks:$name"
+        val cached = SearchCache.get(cacheKey, providersParamRaw)
+        if (cached != null) {
+            call.respond(cached.tracks)
+            return@get
+        }
+
+        val targetArtistClean = name.lowercase().replace(Regex("[^a-z0-9]"), "")
+
+        val tracks = backends.search(name, preferred)
+            .filter { it.artworkUrl != null }
+            .filter { track ->
+                track.artists.any { it.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistClean } ||
+                        track.artist.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistClean
+            }
+            .groupBy { normalizeForDedup(it.title) }
+            .values
+            .map { group -> group.maxByOrNull { it.artists.size } ?: group.first() }
+
+        SearchCache.put(cacheKey, providersParamRaw, SearchResponse(tracks, emptyList()))
+
+        call.respond(tracks)
+    }
+
     get("/api/album/{id}") {
         val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
         val album = backends.getAlbum(id)
