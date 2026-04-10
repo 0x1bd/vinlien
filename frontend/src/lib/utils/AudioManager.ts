@@ -30,6 +30,15 @@ declare global {
         vinlienElectron?: {
             updateMedia: (metadata: { title: string, artist: string, album?: string, artwork?: string | null }) => void;
             updatePosition: (times: { position: number, duration: number }) => void;
+            updatePlayState?: (playing: boolean) => void;
+        }
+        vinlienControl?: {
+            play: () => void;
+            pause: () => void;
+            togglePlay: () => void;
+            next: () => void;
+            prev: () => void;
+            seekTo: (seconds: number) => void;
         }
     }
 }
@@ -40,6 +49,7 @@ class AudioManager {
     private preloadedTrackId: string | null = null;
     private preloadAttemptedForTrack: string | null = null;
     private isFetchingRec = false;
+    private lastPositionReportSec = -1;
 
     private audioContext: AudioContext | null = null;
     private analyserNode: AnalyserNode | null = null;
@@ -69,6 +79,12 @@ class AudioManager {
             audioProgress.set((cur / dur) * 100);
             currentTimeDisplay.set(this.formatTime(cur));
             durationDisplay.set(this.formatTime(dur));
+
+            const curSec = Math.floor(cur);
+            if (curSec !== this.lastPositionReportSec) {
+                this.lastPositionReportSec = curSec;
+                this.updatePositionState();
+            }
 
             const remaining = dur - cur;
             if (dur > 1 && remaining <= PRELOAD_SECONDS_BEFORE_END && remaining > 0) {
@@ -110,6 +126,7 @@ class AudioManager {
         isPlaying.subscribe(play => {
             if (play && this.audio.src) this.audio.play().catch(() => {});
             else this.audio.pause();
+            window.vinlienElectron?.updatePlayState?.(play);
         });
 
         volume.subscribe(v => this.audio.volume = v);
@@ -119,6 +136,7 @@ class AudioManager {
             if (track) {
                 this.preloadAttemptedForTrack = null;
                 this.silenceStartTime = null;
+                this.lastPositionReportSec = -1;
 
                 const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
                 if (currentSrcId === track.id && this.audio.readyState > 0) {
@@ -349,6 +367,10 @@ class AudioManager {
         this.audio.currentTime = (percent / 100) * this.audio.duration;
     }
 
+    seekToSeconds(seconds: number) {
+        this.audio.currentTime = seconds;
+    }
+
     private formatTime(secs: number) {
         if (isNaN(secs) || !Number.isFinite(secs)) return "0:00";
         const m = Math.floor(secs / 60);
@@ -358,3 +380,14 @@ class AudioManager {
 }
 
 export const audioManager = new AudioManager();
+
+if (typeof window !== 'undefined') {
+    window.vinlienControl = {
+        play: () => isPlaying.set(true),
+        pause: () => isPlaying.set(false),
+        togglePlay: () => isPlaying.update(p => !p),
+        next: () => audioManager.playNext(true),
+        prev: () => audioManager.prev(),
+        seekTo: (seconds: number) => audioManager.seekToSeconds(seconds),
+    };
+}
