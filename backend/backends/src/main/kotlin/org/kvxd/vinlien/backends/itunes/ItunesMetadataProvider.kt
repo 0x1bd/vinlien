@@ -145,10 +145,13 @@ class ItunesMetadataProvider : MusicProvider {
     }
 
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        val artistNormalized = track.artist.normalized()
-        searchTracks(track.artist).filter { candidate ->
+        val primaryArtist = Normalizer.primaryArtist(track)
+        val primaryNormalized = primaryArtist.normalized()
+        searchTracks(primaryArtist).filter { candidate ->
             candidate.canonicalId != track.canonicalId &&
-                    candidate.artist.normalized().contains(artistNormalized)
+                    candidate.artist.normalized().let { a ->
+                        a.contains(primaryNormalized) || primaryNormalized.contains(a)
+                    }
         }
     }
 

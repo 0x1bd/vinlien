@@ -217,7 +217,7 @@ class LastFmMetadataProvider(
         }
 
         val (queryArtist, queryTitle) = findMostPopularLastFmMatch(track.title, primaryArtist)
-            ?: (primaryArtist to track.title)
+            ?: (track.artist to track.title)
         val res = fetchParsed(apiUrl("track.getsimilar", "artist" to queryArtist, "track" to queryTitle, "limit" to "15"))
         res.similartracks?.track.parseLfmList<LfmTrack>().mapNotNull { it.toTrack() }
     }

@@ -9,7 +9,7 @@ private val PRIMARY_ARTIST_SPLIT = Regex(
 )
 
 private val ARTIST_COLLABORATION_SPLIT = Regex(
-    """[\s,]*(?:feat|ft|featuring)\.?\s+|[\s]*&[\s]*""",
+    """[\s]*(?:feat|ft|featuring)\.?\s+|[\s]*[,&][\s]*""",
     RegexOption.IGNORE_CASE
 )
 

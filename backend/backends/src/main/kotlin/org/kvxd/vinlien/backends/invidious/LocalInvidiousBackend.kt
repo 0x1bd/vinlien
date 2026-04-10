@@ -102,8 +102,7 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
             val videoId: String = when {
                 track.id.matches(YT_ID_REGEX) -> track.id
                 else -> {
-                    val primaryArtist = Normalizer.primaryArtist(track)
-                    search("$primaryArtist ${track.title}").firstOrNull()?.id
+                    search("${track.artist} ${track.title}").firstOrNull()?.id
                         ?: return@withContext emptyList()
                 }
             }

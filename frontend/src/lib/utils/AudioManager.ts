@@ -200,9 +200,12 @@ class AudioManager {
             return titleMatch && artistMatch;
         });
         if (match?.artworkUrl) {
+            const enriched = {...track, artworkUrl: match.artworkUrl};
             queue.update(q => q.map((t, i) =>
-                i === idx && t.id === track.id ? {...t, artworkUrl: match.artworkUrl} : t
+                i === idx && t.id === track.id ? enriched : t
             ));
+            apiRequest('/api/tracks', {method: 'PUT', body: enriched})
+                .catch(() => {});
         }
     }
 

@@ -18,6 +18,12 @@ internal val trendingCache = TtlCache<String, List<Track>>(ttlMs = 30 * 60 * 100
 private const val TRENDING_CACHE_KEY = "trending"
 
 fun Route.feedRoutes(engine: AggregationEngine) {
+    put("/api/tracks") {
+        val track = call.receive<Track>()
+        dbQuery { DatabaseFactory.insertOrUpdateTrack(track) }
+        call.respond(HttpStatusCode.OK)
+    }
+
     post("/api/history") {
         val track = call.receive<Track>()
         val userId = call.principal<JWTPrincipal>()?.payload?.getClaim("id")?.asString()
