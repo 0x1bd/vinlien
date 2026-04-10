@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {apiRequest} from '$lib/utils/api';
     import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
@@ -18,10 +18,25 @@
     let isSearching = false;
     let isSearchOpen = false;
     let searchContainer: HTMLElement;
-    let timeout: ReturnType<typeof setTimeout>;
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    let eventSource: EventSource | null = null;
+
+    function closeEventSource() {
+        eventSource?.close();
+        eventSource = null;
+    }
+
+    function computeUniqueArtists(results: SearchResponse): string[] {
+        return Array.from(new Set([
+            ...results.tracks.flatMap((t: any) => t.artists as string[]),
+            ...results.albums.map((a: any) => a.artist as string)
+        ])).slice(0, 5);
+    }
 
     function handleInput() {
-        clearTimeout(timeout);
+        clearTimeout(debounceTimer);
+        closeEventSource();
+
         if (!query.trim()) {
             searchResults = {tracks: [], albums: []};
             uniqueArtists = [];
@@ -32,18 +47,39 @@
 
         isSearchOpen = true;
         isSearching = true;
+        searchResults = {tracks: [], albums: []};
 
-        timeout = setTimeout(async () => {
-            searchResults = await apiRequest(`/api/search?q=${encodeURIComponent(query)}`);
+        debounceTimer = setTimeout(() => {
+            eventSource = new EventSource(
+                `/api/search/stream?q=${encodeURIComponent(query)}`,
+                {withCredentials: true}
+            );
 
-            uniqueArtists = Array.from(new Set([
-                ...searchResults.tracks.flatMap((t: any) => t.artists as string[]),
-                ...searchResults.albums.map((a: any) => a.artist as string)
-            ])).slice(0, 5);
+            eventSource.onmessage = (e) => {
+                const data = JSON.parse(e.data) as SearchResponse;
+                if (data.tracks.length > 0 || data.albums.length > 0) {
+                    searchResults = data;
+                    uniqueArtists = computeUniqueArtists(data);
+                    isSearching = false;
+                }
+            };
 
-            isSearching = false;
+            eventSource.addEventListener('done', () => {
+                closeEventSource();
+                isSearching = false;
+            });
+
+            eventSource.onerror = () => {
+                closeEventSource();
+                isSearching = false;
+            };
         }, 500);
     }
+
+    onDestroy(() => {
+        closeEventSource();
+        clearTimeout(debounceTimer);
+    });
 
     function playTrack(track: Track) {
         $queue = [track];

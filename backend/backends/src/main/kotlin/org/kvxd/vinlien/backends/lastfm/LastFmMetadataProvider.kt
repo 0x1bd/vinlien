@@ -18,7 +18,8 @@ import org.kvxd.vinlien.shared.ArtistInfo
 import org.kvxd.vinlien.shared.Track
 import java.net.URLDecoder
 import java.net.URLEncoder
-import java.util.UUID
+
+private val PLACEHOLDER_IMAGE_HASH = "2a96cbd8b46e442fc41c2b86b821562f"
 
 @Serializable
 private data class LfmResponse(
@@ -72,16 +73,16 @@ private data class LfmTrack(
 
         val artworkUrl = listOf("mega", "extralarge", "large").firstNotNullOfOrNull { size ->
             image.firstOrNull { it.size == size }?.text
-                ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+                ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
         }
 
         return Track(
-            id = "lastfm:${UUID.randomUUID()}",
+            id = "lastfm:${Normalizer.canonicalIdFor(resolvedArtist, title)}",
             title = title,
             artist = resolvedArtist,
             durationMs = durationSec * 1000L,
             artworkUrl = artworkUrl,
-            canonicalId = "${resolvedArtist.lowercase().trim()}:::${title.lowercase().trim()}",
+            canonicalId = Normalizer.canonicalIdFor(resolvedArtist, title),
             lastFmUrl = url
         )
     }
@@ -194,7 +195,7 @@ class LastFmMetadataProvider(
                             .track?.album?.image?.let { images ->
                                 listOf("extralarge", "large", "mega").firstNotNullOfOrNull { size ->
                                     images.firstOrNull { it.size == size }?.text
-                                        ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+                                        ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
                                 }
                             }
                     }.getOrNull()
@@ -210,16 +211,14 @@ class LastFmMetadataProvider(
         val urlPair = parseLastFmUrl(track.lastFmUrl)
         if (urlPair != null) {
             val (urlArtist, urlTitle) = urlPair
-            val res =
-                fetchParsed(apiUrl("track.getsimilar", "artist" to urlArtist, "track" to urlTitle, "limit" to "15"))
+            val res = fetchParsed(apiUrl("track.getsimilar", "artist" to urlArtist, "track" to urlTitle, "limit" to "15"))
             val rawTracks = res.similartracks?.track.parseLfmList<LfmTrack>()
             if (rawTracks.isNotEmpty()) return@withContext rawTracks.mapNotNull { it.toTrack() }
         }
 
         val (queryArtist, queryTitle) = findMostPopularLastFmMatch(track.title, primaryArtist)
             ?: (primaryArtist to track.title)
-        val res =
-            fetchParsed(apiUrl("track.getsimilar", "artist" to queryArtist, "track" to queryTitle, "limit" to "15"))
+        val res = fetchParsed(apiUrl("track.getsimilar", "artist" to queryArtist, "track" to queryTitle, "limit" to "15"))
         res.similartracks?.track.parseLfmList<LfmTrack>().mapNotNull { it.toTrack() }
     }
 
@@ -271,7 +270,7 @@ class LastFmMetadataProvider(
             val resolvedArtist = albumObj.artist ?: artist
             val resolvedTitle = albumObj.name ?: albumTitle
             val artworkUrl = albumObj.image.lastOrNull()?.text
-                ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+                ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
 
             val wikiYear = albumObj.wiki?.published
                 ?.let { Regex("""\b(\d{4})\b""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
@@ -305,7 +304,7 @@ class LastFmMetadataProvider(
                     else -> artist
                 }
                 val artworkUrl = item.image.lastOrNull()?.text
-                    ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+                    ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
                 Album(
                     id = "lastfm:album:${artistName}:::${title}",
                     title = title,
@@ -333,7 +332,7 @@ class LastFmMetadataProvider(
             val tags = artistObj.tags?.tag.parseLfmList<LfmTag>().mapNotNull { it.name }.take(5)
             val imageUrl = listOf("mega", "extralarge", "large").firstNotNullOfOrNull { size ->
                 artistObj.image.firstOrNull { it.size == size }?.text
-                    ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+                    ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
             }
 
             ArtistInfo(
@@ -351,7 +350,7 @@ class LastFmMetadataProvider(
         val title = name ?: return null
         val artistName = artist ?: return null
         val artworkUrl = image.lastOrNull()?.text
-            ?.takeIf { it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f") }
+            ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
         return Album(
             id = "lastfm:album:${artistName}:::${title}",
             title = title,

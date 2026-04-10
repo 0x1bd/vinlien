@@ -4,16 +4,42 @@
     export let src: string | null | undefined = undefined;
     export let seed: string = '';
 
+    const LOAD_TIMEOUT_MS = 5000;
+
     let error = false;
     let loading = false;
     let loadedSrc: string | null = null;
+    let loadTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function clearLoadTimer() {
+        if (loadTimer !== null) {
+            clearTimeout(loadTimer);
+            loadTimer = null;
+        }
+    }
+
+    function onImageSettled(success: boolean) {
+        clearLoadTimer();
+        loading = false;
+        if (success) {
+            loadedSrc = src ?? null;
+        } else {
+            error = true;
+            loadedSrc = null;
+        }
+    }
 
     $: {
         const next = src ?? null;
         if (next !== loadedSrc) {
             error = false;
+            clearLoadTimer();
             loading = !!next;
-            if (!next) loadedSrc = null;
+            if (!next) {
+                loadedSrc = null;
+            } else {
+                loadTimer = setTimeout(() => onImageSettled(false), LOAD_TIMEOUT_MS);
+            }
         }
     }
 </script>
@@ -25,8 +51,8 @@
         {/if}
         <img {src} alt=""
              style:visibility={loading ? 'hidden' : 'visible'}
-             on:load={() => { loading = false; loadedSrc = src ?? null; }}
-             on:error={() => { loading = false; error = true; loadedSrc = null; }}>
+             on:load={() => onImageSettled(true)}
+             on:error={() => onImageSettled(false)}>
     {:else}
         <div class="art-placeholder" style="background: {placeholderGradient(seed)}">
             <slot/>

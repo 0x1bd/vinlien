@@ -39,6 +39,7 @@ fun Application.module() {
         filter { call -> (call.response.status()?.value ?: 0) >= 400 }
     }
     install(ContentNegotiation) { json() }
+    install(io.ktor.server.sse.SSE)
     install(CORS) {
         allowHost("localhost:5173")
         allowHost("127.0.0.1:5173")

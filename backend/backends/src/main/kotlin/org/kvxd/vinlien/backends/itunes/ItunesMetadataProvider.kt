@@ -6,11 +6,15 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.kvxd.vinlien.backends.Capability
 import org.kvxd.vinlien.backends.MusicProvider
+import org.kvxd.vinlien.backends.Normalizer
+import org.kvxd.vinlien.backends.normalized
 import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
 import org.kvxd.vinlien.shared.Album
 import org.kvxd.vinlien.shared.Track
 import java.net.URLEncoder
+
+private val String.urlEncoded get() = URLEncoder.encode(this, "UTF-8")
 
 @Serializable
 private data class ItunesResponse(val results: List<ItunesResult> = emptyList())
@@ -41,7 +45,7 @@ private data class ItunesResult(
             artist = artist,
             durationMs = durationMs,
             artworkUrl = artworkUrl,
-            canonicalId = "${artist.lowercase().trim()}:::${title.lowercase().trim()}"
+            canonicalId = Normalizer.canonicalIdFor(artist, title)
         )
     }
 
@@ -89,26 +93,26 @@ class ItunesMetadataProvider : MusicProvider {
 
     override suspend fun searchTracks(query: String): List<Track> = withContext(Dispatchers.IO) {
         fetchParsed<ItunesResponse>(
-            "https://itunes.apple.com/search?term=${query.encoded}&limit=20&media=music"
+            "https://itunes.apple.com/search?term=${query.urlEncoded}&limit=20&media=music"
         ).results.mapNotNull { it.toTrack() }
     }
 
     override suspend fun searchAlbums(query: String): List<Album> = withContext(Dispatchers.IO) {
         fetchParsed<ItunesResponse>(
-            "https://itunes.apple.com/search?term=${query.encoded}&entity=album&limit=15"
+            "https://itunes.apple.com/search?term=${query.urlEncoded}&entity=album&limit=15"
         ).results.mapNotNull { it.toAlbum() }
     }
 
     override suspend fun getArtistAlbums(artist: String): List<Album> = withContext(Dispatchers.IO) {
         fetchParsed<ItunesResponse>(
-            "https://itunes.apple.com/search?term=${artist.encoded}&entity=album&attribute=allArtistTerm&limit=50"
+            "https://itunes.apple.com/search?term=${artist.urlEncoded}&entity=album&attribute=allArtistTerm&limit=50"
         ).results.filter { (it.trackCount ?: 1) > 1 }.mapNotNull { it.toAlbum() }
     }
 
     override suspend fun getAlbum(artist: String, albumTitle: String): Album? = withContext(Dispatchers.IO) {
         try {
             val searchRes = fetchParsed<ItunesResponse>(
-                "https://itunes.apple.com/search?term=${"$artist $albumTitle".encoded}&entity=album&limit=10"
+                "https://itunes.apple.com/search?term=${"$artist $albumTitle".urlEncoded}&entity=album&limit=10"
             )
             val match = searchRes.results.firstOrNull { r ->
                 r.collectionName?.equals(albumTitle, ignoreCase = true) == true &&
@@ -141,10 +145,10 @@ class ItunesMetadataProvider : MusicProvider {
     }
 
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        val artistCanonical = track.artist.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+        val artistNormalized = track.artist.normalized()
         searchTracks(track.artist).filter { candidate ->
             candidate.canonicalId != track.canonicalId &&
-                candidate.artist.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "").contains(artistCanonical)
+                    candidate.artist.normalized().contains(artistNormalized)
         }
     }
 
@@ -161,13 +165,11 @@ class ItunesMetadataProvider : MusicProvider {
                     artist = artist,
                     durationMs = 0L,
                     artworkUrl = artworkUrl,
-                    canonicalId = "${artist.lowercase().trim()}:::${title.lowercase().trim()}"
+                    canonicalId = Normalizer.canonicalIdFor(artist, title)
                 )
             } ?: emptyList()
         } catch (e: Exception) {
             emptyList()
         }
     }
-
-    private val String.encoded get() = URLEncoder.encode(this, "UTF-8")
 }

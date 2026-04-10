@@ -4,14 +4,12 @@ import org.kvxd.vinlien.shared.Album
 import org.kvxd.vinlien.shared.ArtistInfo
 import org.kvxd.vinlien.shared.Track
 
-private fun String.canonical() = lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim()
-
-private fun String.primaryArtist(): String =
+private fun String.primaryArtistPart(): String =
     split(Regex("""[\s]*[&,][\s]*|[\s]+(feat|ft|featuring)\.?\s+""", RegexOption.IGNORE_CASE))
-        .firstOrNull()?.canonical() ?: canonical()
+        .firstOrNull()?.normalized() ?: normalized()
 
 object TrackMerger {
-    private fun Track.fingerprint() = "${artist.canonical()}:::${title.canonical()}"
+    private fun Track.fingerprint() = "${artist.normalized()}:::${title.normalized()}"
 
     fun merge(tracks: List<Track>): List<Track> =
         tracks.groupBy { it.fingerprint() }
@@ -30,7 +28,7 @@ object TrackMerger {
 }
 
 object AlbumMerger {
-    private fun Album.fingerprint() = "${artist.primaryArtist()}:::${title.canonical()}"
+    private fun Album.fingerprint() = "${artist.primaryArtistPart()}:::${title.normalized()}"
 
     fun dedup(albums: List<Album>): List<Album> =
         albums.groupBy { it.fingerprint() }.map { (_, group) -> mergeGroup(group) }
@@ -41,11 +39,10 @@ object AlbumMerger {
         val (canonicalArtist, canonicalTitle) = parseNativeId(nativeId) ?: (null to null)
 
         val matching = if (canonicalTitle != null) {
-            albums.filter { it.title.canonical() == canonicalTitle.canonical() }
+            albums.filter { it.title.normalized() == canonicalTitle.normalized() }
         } else albums
 
-        val base = (matching.ifEmpty { albums }).maxByOrNull { it.tracks.size }
-            ?: albums.first()
+        val base = (matching.ifEmpty { albums }).maxByOrNull { it.tracks.size } ?: albums.first()
 
         val cleanArtist = canonicalArtist
             ?: (matching.ifEmpty { albums }).minByOrNull { it.artist.length }?.artist
@@ -55,16 +52,14 @@ object AlbumMerger {
             .filter { it !== base }
             .flatMap { it.tracks }
             .filter { it.artworkUrl != null }
-            .associate { it.title.canonical() to it.artworkUrl!! }
+            .associate { it.title.normalized() to it.artworkUrl!! }
 
         val albumArtwork = albums.mapNotNull { it.artworkUrl }.firstOrNull() ?: base.artworkUrl
 
         val mergedTracks = base.tracks.map { track ->
             when {
                 track.artworkUrl != null -> track
-                else -> track.copy(
-                    artworkUrl = otherArtworkByTitle[track.title.canonical()] ?: albumArtwork
-                )
+                else -> track.copy(artworkUrl = otherArtworkByTitle[track.title.normalized()] ?: albumArtwork)
             }
         }
 
@@ -82,21 +77,16 @@ object AlbumMerger {
             val parts = nativeId.removePrefix("lastfm:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
         }
-
         nativeId.startsWith("itunes:album:") -> {
             val parts = nativeId.removePrefix("itunes:album:").split(":::", limit = 3)
             if (parts.size == 3) parts[1] to parts[2] else null
         }
-
         nativeId.startsWith("mb:album:") -> {
             val parts = nativeId.removePrefix("mb:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
         }
-
         else -> null
     }
-
-    private fun String.canonical() = lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim()
 
     private fun mergeGroup(group: List<Album>): Album {
         val base = group.maxByOrNull { it.tracks.size } ?: group.first()

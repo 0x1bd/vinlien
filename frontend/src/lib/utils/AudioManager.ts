@@ -18,6 +18,22 @@ export const audioProgress = writable(0);
 export const currentTimeDisplay = writable("0:00");
 export const durationDisplay = writable("0:00");
 
+const REPEAT_OFF = 0;
+const REPEAT_ALL = 1;
+const REPEAT_ONE = 2;
+
+const PRELOAD_SECONDS_BEFORE_END = 15;
+const SILENCE_RMS_THRESHOLD = 0.005;
+
+declare global {
+    interface Window {
+        vinlienElectron?: {
+            updateMedia: (metadata: { title: string, artist: string, album?: string, artwork?: string | null }) => void;
+            updatePosition: (times: { position: number, duration: number }) => void;
+        }
+    }
+}
+
 class AudioManager {
     private audio = new Audio();
     private preloadAudio = new Audio();
@@ -43,8 +59,7 @@ class AudioManager {
 
         this.audio.addEventListener('play', () => {
             if (this.audioContext?.state === 'suspended') {
-                this.audioContext.resume().catch(() => {
-                });
+                this.audioContext.resume().catch(() => {});
             }
         });
 
@@ -56,7 +71,7 @@ class AudioManager {
             durationDisplay.set(this.formatTime(dur));
 
             const remaining = dur - cur;
-            if (dur > 1 && remaining <= 15 && remaining > 0) {
+            if (dur > 1 && remaining <= PRELOAD_SECONDS_BEFORE_END && remaining > 0) {
                 this.preloadNextTrackIfNeeded();
             }
 
@@ -65,12 +80,12 @@ class AudioManager {
                 if (this.analyserNode) {
                     const rms = this.getRms();
                     const threshold = get(silenceSkipThreshold);
-                    if (rms < 0.005) {
+                    if (rms < SILENCE_RMS_THRESHOLD) {
                         if (this.silenceStartTime === null) this.silenceStartTime = cur;
                         else if (cur - this.silenceStartTime >= threshold) {
                             this.silenceStartTime = null;
                             if (cur < dur / 2) this.audio.currentTime = cur + threshold;
-                            else this.NoNoplayNext();
+                            else this.playNext();
                         }
                     } else {
                         this.silenceStartTime = null;
@@ -81,9 +96,19 @@ class AudioManager {
 
         this.audio.addEventListener('ended', () => this.playNext());
 
+        this.audio.addEventListener('error', () => {
+            if (this.audio.src && get(isPlaying)) {
+                console.warn('[audio] Stream failed, skipping to next track', this.audio.error?.message);
+                this.playNext(true);
+            }
+        });
+
+        this.audio.addEventListener('durationchange', () => this.updatePositionState());
+        this.audio.addEventListener('seeked', () => this.updatePositionState());
+        this.audio.addEventListener('play', () => this.updatePositionState());
+
         isPlaying.subscribe(play => {
-            if (play && this.audio.src) this.audio.play().catch(() => {
-            });
+            if (play && this.audio.src) this.audio.play().catch(() => {});
             else this.audio.pause();
         });
 
@@ -97,20 +122,17 @@ class AudioManager {
 
                 const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
                 if (currentSrcId === track.id && this.audio.readyState > 0) {
-                    if (get(isPlaying)) this.audio.play().catch(() => {
-                    });
+                    if (get(isPlaying)) this.audio.play().catch(() => {});
                     return;
                 }
 
                 apiRequest('/api/history', {method: 'POST', body: track})
                     .catch(e => console.error("Failed to record history", e));
 
-                const streamUrlParam = track.streamUrl ? `&streamUrl=${encodeURIComponent(track.streamUrl)}` : '';
-                this.audio.src = `/api/stream?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&durationMs=${track.durationMs}${streamUrlParam}`;
+                this.audio.src = this.buildStreamUrl(track);
                 this.audio.load();
 
-                if (get(isPlaying)) this.audio.play().catch(() => {
-                });
+                if (get(isPlaying)) this.audio.play().catch(() => {});
 
                 if ('mediaSession' in navigator) {
                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -119,16 +141,88 @@ class AudioManager {
                         album: 'Vinlien',
                         artwork: [{src: track.artworkUrl || '', sizes: '512x512', type: 'image/jpeg'}]
                     });
+
                     navigator.mediaSession.setActionHandler('play', () => isPlaying.set(true));
                     navigator.mediaSession.setActionHandler('pause', () => isPlaying.set(false));
                     navigator.mediaSession.setActionHandler('previoustrack', () => this.prev());
                     navigator.mediaSession.setActionHandler('nexttrack', () => this.playNext(true));
+                    navigator.mediaSession.setActionHandler('seekto', (details) => {
+                        if (details.seekTime !== undefined && details.seekTime !== null) {
+                            this.audio.currentTime = details.seekTime;
+                        }
+                    });
+                }
+
+                if (window.vinlienElectron) {
+                    window.vinlienElectron.updateMedia({
+                        title: track.title,
+                        artist: track.artist,
+                        album: 'Vinlien',
+                        artwork: track.artworkUrl || null
+                    });
+                }
+
+                if (!track.artworkUrl) {
+                    this.enrichArtwork(track).catch(() => {});
                 }
             } else {
                 this.audio.pause();
                 this.audio.removeAttribute('src');
+
+                if (window.vinlienElectron) {
+                    window.vinlienElectron.updateMedia({title: '', artist: ''});
+                }
             }
         });
+    }
+
+    private buildStreamUrl(track: Track): string {
+        const params = new URLSearchParams({
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            durationMs: String(track.durationMs)
+        });
+        if (track.streamUrl) params.set('streamUrl', track.streamUrl);
+        return `/api/stream?${params}`;
+    }
+
+    private async enrichArtwork(track: Track): Promise<void> {
+        const idx = get(currentTrackIndex);
+        const q = encodeURIComponent(`${track.artist} ${track.title}`);
+        const results = await apiRequest(`/api/search?q=${q}`);
+        const match = (results?.tracks as Track[] | undefined)?.find(t => {
+            if (!t.artworkUrl) return false;
+            const titleMatch = t.title.toLowerCase() === track.title.toLowerCase();
+            const artistMatch = t.artist.toLowerCase().includes(
+                track.artist.toLowerCase().split(' ')[0]
+            );
+            return titleMatch && artistMatch;
+        });
+        if (match?.artworkUrl) {
+            queue.update(q => q.map((t, i) =>
+                i === idx && t.id === track.id ? {...t, artworkUrl: match.artworkUrl} : t
+            ));
+        }
+    }
+
+    private updatePositionState() {
+        const isValidNumber = !isNaN(this.audio.duration) && Number.isFinite(this.audio.duration);
+
+        if ('mediaSession' in navigator && isValidNumber) {
+            navigator.mediaSession.setPositionState({
+                duration: this.audio.duration,
+                playbackRate: this.audio.playbackRate,
+                position: this.audio.currentTime
+            });
+        }
+
+        if (window.vinlienElectron && isValidNumber) {
+            window.vinlienElectron.updatePosition({
+                duration: this.audio.duration,
+                position: this.audio.currentTime
+            });
+        }
     }
 
     private initAudioContext() {
@@ -169,9 +263,9 @@ class AudioManager {
         let nextTrack: Track | null = null;
         let fetchRecs = false;
 
-        if (rm === 2) nextTrack = q[idx];
+        if (rm === REPEAT_ONE) nextTrack = q[idx];
         else if (idx + 1 < q.length) nextTrack = q[idx + 1];
-        else if (rm === 1) nextTrack = q[0];
+        else if (rm === REPEAT_ALL) nextTrack = q[0];
         else fetchRecs = true;
 
         if (fetchRecs) {
@@ -191,8 +285,7 @@ class AudioManager {
 
         if (nextTrack && this.preloadedTrackId !== nextTrack.id) {
             this.preloadedTrackId = nextTrack.id;
-            const streamUrlParam = nextTrack.streamUrl ? `&streamUrl=${encodeURIComponent(nextTrack.streamUrl)}` : '';
-            this.preloadAudio.src = `/api/stream?id=${encodeURIComponent(nextTrack.id)}&title=${encodeURIComponent(nextTrack.title)}&artist=${encodeURIComponent(nextTrack.artist)}&durationMs=${nextTrack.durationMs}${streamUrlParam}`;
+            this.preloadAudio.src = this.buildStreamUrl(nextTrack);
             this.preloadAudio.load();
         }
     }
@@ -204,10 +297,9 @@ class AudioManager {
         const rm = get(repeatMode);
         const idx = get(currentTrackIndex);
 
-        if (rm === 2 && !force) {
+        if (rm === REPEAT_ONE && !force) {
             this.audio.currentTime = 0;
-            this.audio.play().catch(() => {
-            });
+            this.audio.play().catch(() => {});
             return;
         }
 
@@ -216,7 +308,7 @@ class AudioManager {
             return;
         }
 
-        if (rm === 1 && !force) {
+        if (rm === REPEAT_ALL && !force) {
             currentTrackIndex.set(0);
             return;
         }

@@ -122,8 +122,8 @@ fun Route.adminRoutes() {
 
     post("/api/admin/cache/clear") {
         if (!isRequesterAdmin(call)) return@post call.respond(HttpStatusCode.Forbidden)
-        SearchCache.clear()
-        TrendingCache.clear()
+        searchCache.clear()
+        trendingCache.clear()
         call.respond(HttpStatusCode.OK)
     }
 }

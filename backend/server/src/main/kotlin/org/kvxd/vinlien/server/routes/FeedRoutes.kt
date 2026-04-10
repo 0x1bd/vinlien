@@ -14,27 +14,8 @@ import org.kvxd.vinlien.server.DatabaseFactory.toTrack
 import org.kvxd.vinlien.shared.HomeFeed
 import org.kvxd.vinlien.shared.Track
 
-object TrendingCache {
-    private var cachedTracks: List<Track> = emptyList()
-    private var lastFetched: Long = 0
-    private const val CACHE_TTL = 30 * 60 * 1000L
-
-    @Synchronized
-    fun getValidCache(): List<Track>? =
-        if (cachedTracks.isNotEmpty() && (System.currentTimeMillis() - lastFetched < CACHE_TTL)) cachedTracks else null
-
-    @Synchronized
-    fun updateCache(tracks: List<Track>) {
-        cachedTracks = tracks
-        lastFetched = System.currentTimeMillis()
-    }
-
-    @Synchronized
-    fun clear() {
-        cachedTracks = emptyList()
-        lastFetched = 0
-    }
-}
+internal val trendingCache = TtlCache<String, List<Track>>(ttlMs = 30 * 60 * 1000L)
+private const val TRENDING_CACHE_KEY = "trending"
 
 fun Route.feedRoutes(engine: AggregationEngine) {
     post("/api/history") {
@@ -78,12 +59,14 @@ fun Route.feedRoutes(engine: AggregationEngine) {
     }
 
     get("/api/home/trending") {
-        val cache = TrendingCache.getValidCache()
-        if (cache != null) return@get call.respond(cache)
+        trendingCache.get(TRENDING_CACHE_KEY)?.let {
+            call.respond(it)
+            return@get
+        }
 
         val trending = engine.getTrending()
         if (trending.isNotEmpty()) {
-            TrendingCache.updateCache(trending)
+            trendingCache.put(TRENDING_CACHE_KEY, trending)
             call.respond(trending)
         } else {
             call.respond(emptyList<Track>())

@@ -22,6 +22,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.call.logging)
+    implementation(libs.ktor.server.sse)
 
     implementation(libs.exposed.core)
     implementation(libs.exposed.dao)

@@ -57,7 +57,7 @@ private data class ScTrack(
             durationMs = durationMs,
             artworkUrl = artworkUrl,
             streamUrl = streamUrl,
-            canonicalId = "${artist.lowercase().trim()}:::${trackTitle.lowercase().trim()}"
+            canonicalId = Normalizer.canonicalIdFor(artist, trackTitle)
         )
     }
 }
@@ -85,7 +85,7 @@ private data class ScStreamResponse(val url: String? = null)
 class SoundCloudBackend : MusicProvider {
     override val id = "sc"
     override val name = "SoundCloud"
-    override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, /*TODO: Capability.RECOMMENDATIONS,*/ Capability.AUDIO_STREAM)
+    override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, Capability.AUDIO_STREAM)
 
     private val logger = LoggerFactory.getLogger(SoundCloudBackend::class.java)
     private var clientId: String? = null
@@ -125,34 +125,6 @@ class SoundCloudBackend : MusicProvider {
     }
 
     override suspend fun searchAudio(query: String): List<Track> = searchTracks(query)
-
-    /* TODO: Figure out why soundcloud recommendations are often completely unrelated
-    override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        try {
-            val scId: String = when {
-                track.id.startsWith("sc:") -> track.id.removePrefix("sc:")
-                else -> {
-                    val primaryArtist = Normalizer.primaryArtist(track)
-                    val encoded = URLEncoder.encode("$primaryArtist ${track.title}", "UTF-8")
-                    val results = sharedJson.decodeFromString<ScSearchResponse>(
-                        fetch("https://api-v2.soundcloud.com/search/tracks?q=$encoded&client_id=${getClientId()}&limit=5")
-                    ).collection
-                    val match = results.firstOrNull { t ->
-                        val tTitle = t.title?.lowercase() ?: ""
-                        val wantTitle = track.title.lowercase()
-                        tTitle.contains(wantTitle) || wantTitle.contains(tTitle)
-                    } ?: results.firstOrNull()
-                    match?.id?.toString() ?: return@withContext emptyList()
-                }
-            }
-            sharedJson.decodeFromString<ScSearchResponse>(
-                fetch("https://api-v2.soundcloud.com/tracks/$scId/related?client_id=${getClientId()}&limit=10")
-            ).collection.mapNotNull { it.toDomainTrack() }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-     */
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
         try {

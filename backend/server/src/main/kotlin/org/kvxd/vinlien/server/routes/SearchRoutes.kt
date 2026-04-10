@@ -6,77 +6,61 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.server.sse.*
+import io.ktor.sse.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.shared.SearchResponse
 import org.kvxd.vinlien.shared.Track
-import java.util.concurrent.ConcurrentHashMap
+
+private val sseJson = Json { encodeDefaults = true }
+
+internal val searchCache = TtlCache<String, SearchResponse>(ttlMs = 30 * 60 * 1000L, maxSize = 500)
+
+private object TrackDeduplicator {
+    fun fingerprint(title: String): String {
+        var t = title.lowercase()
+        if (t.contains(" - ")) t = t.substringAfter(" - ")
+        t = t.replace(Regex("\\(.*?\\)|\\[.*?\\]"), "")
+        t = t.replace(Regex("[^a-z0-9 ]"), "")
+        t = t.replace(Regex("(?i)\\b(official|music video|lyric video|audio|live|remix|hd|hq|ft|feat)\\b"), "")
+        return t.trim().replace(Regex("\\s+"), " ")
+    }
+}
 
 @Serializable
 data class RecReq(val queue: List<Track>)
 
-object SearchCache {
-    private val cache = ConcurrentHashMap<String, Pair<Long, SearchResponse>>()
-    private const val TTL = 30 * 60 * 1000L
-    private const val MAX_SIZE = 500
-
-    fun get(query: String, providers: String?): SearchResponse? {
-        val key = "$query|${providers ?: ""}"
-        val entry = cache[key] ?: return null
-        if (System.currentTimeMillis() - entry.first > TTL) {
-            cache.remove(key)
-            return null
-        }
-        return entry.second
-    }
-
-    fun put(query: String, providers: String?, results: SearchResponse) {
-        if (cache.size >= MAX_SIZE) cache.clear()
-        val key = "$query|${providers ?: ""}"
-        cache[key] = System.currentTimeMillis() to results
-    }
-
-    fun clear() = cache.clear()
-}
-
-fun normalizeForDedup(title: String): String {
-    var t = title.lowercase()
-    if (t.contains(" - ")) t = t.substringAfter(" - ")
-    t = t.replace(Regex("\\(.*?\\)|\\[.*?\\]"), "")
-    t = t.replace(Regex("[^a-z0-9 ]"), "")
-    t = t.replace(Regex("(?i)\\b(official|music video|lyric video|audio|live|remix|hd|hq|ft|feat)\\b"), "")
-    return t.trim().replace(Regex("\\s+"), " ")
-}
-
 fun Route.searchRoutes(engine: AggregationEngine) {
     get("/api/search") {
         val query = call.request.queryParameters["q"] ?: ""
-        val providersParamRaw = call.request.queryParameters["providers"]
+        val providersParam = call.request.queryParameters["providers"]
 
         if (query.isBlank()) {
             call.respond(SearchResponse(emptyList(), emptyList()))
             return@get
         }
 
-        val cached = SearchCache.get(query, providersParamRaw)
-        if (cached != null) {
-            call.respond(cached)
+        val cacheKey = "$query|${providersParam ?: ""}"
+        searchCache.get(cacheKey)?.let {
+            call.respond(it)
             return@get
         }
 
         val tracks = engine.searchTracks(query)
             .filter { it.artworkUrl != null }
-            .distinctBy { normalizeForDedup(it.title) + it.artist.lowercase().take(6) }
+            .distinctBy { TrackDeduplicator.fingerprint(it.title) + it.artist.lowercase().take(6) }
 
         val albums = engine.searchAlbums(query)
             .filter { it.artworkUrl != null }
-            .distinctBy { normalizeForDedup(it.title) + normalizeForDedup(it.artist) }
+            .distinctBy { TrackDeduplicator.fingerprint(it.title) + TrackDeduplicator.fingerprint(it.artist) }
 
         val response = SearchResponse(tracks, albums)
-        SearchCache.put(query, providersParamRaw, response)
+        searchCache.put(cacheKey, response)
         call.respond(response)
     }
 
@@ -99,36 +83,36 @@ fun Route.searchRoutes(engine: AggregationEngine) {
                     .limit(30)
                     .map { it[Tracks.title] }
 
-                val dislikedPlId = Playlists.selectAll()
+                val dislikedPlaylistId = Playlists.selectAll()
                     .where { (Playlists.userId eq userId) and (Playlists.name eq "Disliked Songs") }
                     .singleOrNull()?.get(Playlists.id)
 
-                if (dislikedPlId != null) {
+                if (dislikedPlaylistId != null) {
                     dislikedTitles = (PlaylistTracks innerJoin Tracks)
                         .selectAll()
-                        .where { PlaylistTracks.playlistId eq dislikedPlId }
+                        .where { PlaylistTracks.playlistId eq dislikedPlaylistId }
                         .map { it[Tracks.title] }
                 }
             }
         }
 
-        val historyTitlesClean = (queue.map { it.title } + recentHistoryTitles + dislikedTitles)
-            .map { normalizeForDedup(it) }
+        val seenTitleFingerprints = (queue.map { it.title } + recentHistoryTitles + dislikedTitles)
+            .map { TrackDeduplicator.fingerprint(it) }
 
-        fun isDuplicate(candidateTitle: String): Boolean {
-            val clean = normalizeForDedup(candidateTitle)
-            if (clean.isBlank()) return false
-            return historyTitlesClean.any {
-                it == clean || (clean.length > 4 && (it.contains(clean) || clean.contains(it)))
+        fun isAlreadySeen(candidateTitle: String): Boolean {
+            val fingerprint = TrackDeduplicator.fingerprint(candidateTitle)
+            if (fingerprint.isBlank()) return false
+            return seenTitleFingerprints.any {
+                it == fingerprint || (fingerprint.length > 4 && (it.contains(fingerprint) || fingerprint.contains(it)))
             }
         }
 
         val recs = engine.getRecommendations(currentTrack)
-        val validRec = recs.firstOrNull { r ->
-            queue.none { it.id == r.id } && !isDuplicate(r.title)
+        val freshRec = recs.firstOrNull { r ->
+            queue.none { it.id == r.id } && !isAlreadySeen(r.title)
         }
 
-        call.respond(if (validRec != null) listOf(validRec) else emptyList())
+        call.respond(if (freshRec != null) listOf(freshRec) else emptyList())
     }
 
     get("/api/artist/{name}") {
@@ -146,26 +130,25 @@ fun Route.searchRoutes(engine: AggregationEngine) {
 
     get("/api/artist/{name}/tracks") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
-        val providersParamRaw = call.request.queryParameters["providers"]
+        val providersParam = call.request.queryParameters["providers"]
 
-        val cacheKey = "artist_tracks:$name"
-        val cached = SearchCache.get(cacheKey, providersParamRaw)
-        if (cached != null) {
-            call.respond(cached.tracks)
+        val cacheKey = "artist_tracks:$name|${providersParam ?: ""}"
+        searchCache.get(cacheKey)?.let {
+            call.respond(it.tracks)
             return@get
         }
 
-        val targetArtistClean = name.lowercase().replace(Regex("[^a-z0-9]"), "")
+        val targetArtistNormalized = name.lowercase().replace(Regex("[^a-z0-9]"), "")
 
         val tracks = engine.searchTracks(name)
             .filter { it.artworkUrl != null }
             .filter { track ->
-                track.artists.any { it.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistClean } ||
-                        track.artist.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistClean
+                track.artists.any { it.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistNormalized } ||
+                        track.artist.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistNormalized
             }
-            .distinctBy { normalizeForDedup(it.title) }
+            .distinctBy { TrackDeduplicator.fingerprint(it.title) }
 
-        SearchCache.put(cacheKey, providersParamRaw, SearchResponse(tracks, emptyList()))
+        searchCache.put(cacheKey, SearchResponse(tracks, emptyList()))
         call.respond(tracks)
     }
 
@@ -173,5 +156,37 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
         val album = engine.getAlbum(id)
         if (album != null) call.respond(album) else call.respond(HttpStatusCode.NotFound)
+    }
+
+    sse("/api/search/stream") {
+        val query = call.request.queryParameters["q"] ?: ""
+        if (query.isBlank()) {
+            send(ServerSentEvent(event = "done", data = ""))
+            return@sse
+        }
+
+        val cacheKey = "$query|"
+        val cached = searchCache.get(cacheKey)
+        if (cached != null) {
+            send(ServerSentEvent(data = sseJson.encodeToString(SearchResponse.serializer(), cached)))
+            send(ServerSentEvent(event = "done", data = ""))
+            return@sse
+        }
+
+        var lastResponse: SearchResponse? = null
+        engine.searchStreaming(query).collect { raw ->
+            val tracks = raw.tracks
+                .distinctBy { TrackDeduplicator.fingerprint(it.title) + it.artist.lowercase().take(6) }
+            val albums = raw.albums
+                .distinctBy { TrackDeduplicator.fingerprint(it.title) + TrackDeduplicator.fingerprint(it.artist) }
+            val response = SearchResponse(tracks, albums)
+            if (tracks.isNotEmpty() || albums.isNotEmpty()) {
+                lastResponse = response
+                send(ServerSentEvent(data = sseJson.encodeToString(SearchResponse.serializer(), response)))
+            }
+        }
+
+        lastResponse?.let { searchCache.put(cacheKey, it) }
+        send(ServerSentEvent(event = "done", data = ""))
     }
 }

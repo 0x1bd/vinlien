@@ -86,16 +86,18 @@ object DatabaseFactory {
     suspend fun <T> dbQuery(block: suspend () -> T): T =
         newSuspendedTransaction(Dispatchers.IO) { block() }
 
-    fun ResultRow.toTrack() = Normalizer.track(Track(
-        id = this[Tracks.id],
-        title = this[Tracks.title],
-        artist = this[Tracks.artist],
-        durationMs = this[Tracks.durationMs],
-        streamUrl = this[Tracks.streamUrl],
-        artworkUrl = this[Tracks.artworkUrl],
-        canonicalId = this[Tracks.canonicalId],
-        lastFmUrl = this[Tracks.lastFmUrl]
-    ))
+    fun ResultRow.toTrack() = Normalizer.normalizeTrack(
+        Track(
+            id = this[Tracks.id],
+            title = this[Tracks.title],
+            artist = this[Tracks.artist],
+            durationMs = this[Tracks.durationMs],
+            streamUrl = this[Tracks.streamUrl],
+            artworkUrl = this[Tracks.artworkUrl],
+            canonicalId = this[Tracks.canonicalId],
+            lastFmUrl = this[Tracks.lastFmUrl]
+        )
+    )
 
     fun insertOrUpdateTrack(track: Track) {
         val exists = Tracks.selectAll().where { Tracks.id eq track.id }.count() > 0
@@ -116,9 +118,9 @@ object DatabaseFactory {
                 it[artist] = track.artist
                 it[durationMs] = track.durationMs
                 it[streamUrl] = track.streamUrl
-                it[artworkUrl] = track.artworkUrl
-                it[canonicalId] = track.canonicalId
-                it[lastFmUrl] = track.lastFmUrl
+                if (track.artworkUrl != null) it[artworkUrl] = track.artworkUrl
+                if (track.canonicalId != null) it[canonicalId] = track.canonicalId
+                if (track.lastFmUrl != null) it[lastFmUrl] = track.lastFmUrl
             }
         }
     }
