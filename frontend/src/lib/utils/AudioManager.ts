@@ -144,6 +144,10 @@ class AudioManager {
                     return;
                 }
 
+                audioProgress.set(0);
+                currentTimeDisplay.set("0:00");
+                durationDisplay.set("0:00");
+
                 apiRequest('/api/history', {method: 'POST', body: track})
                     .catch(e => console.error("Failed to record history", e));
 

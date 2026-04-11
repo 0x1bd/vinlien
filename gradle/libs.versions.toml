@@ -1,8 +1,13 @@
 [versions]
+appcompat = "1.7.1"
+constraintlayout = "2.2.1"
+coreKtx = "1.18.0"
 kotlin = "2.3.20"
 ktor = "3.4.2"
 logback = "1.5.32"
 coroutines = "1.9.0"
+material = "1.13.0"
+media = "1.7.1"
 slf4j = "2.0.17"
 exposed = "0.48.0"
 postgresql = "42.7.2"
@@ -10,6 +15,13 @@ hikaricp = "5.1.0"
 jbcrypt = "0.4"
 
 [libraries]
+android-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
+android-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
+android-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+android-kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+android-material = { module = "com.google.android.material:material", version.ref = "material" }
+android-media = { module = "androidx.media:media", version.ref = "media" }
+
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
 ktor-server-auth = { module = "io.ktor:ktor-server-auth", version.ref = "ktor" }
