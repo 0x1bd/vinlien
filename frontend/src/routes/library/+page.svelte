@@ -1,10 +1,16 @@
 <script lang="ts">
     import {userPlaylists} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
+    import {addToast} from '$lib/utils/toast';
     import {goto} from '$app/navigation';
+    import type {Playlist} from '$lib/utils/types';
 
     let isCreating = false;
     let newName = '';
+    let playlistToDelete: Playlist | null = null;
+    let isDeleting = false;
+
+    const SYSTEM = new Set(['Liked Songs', 'Disliked Songs']);
 
     async function createPlaylist() {
         if (!newName.trim()) return;
@@ -16,6 +22,22 @@
             isCreating = false;
         } catch (e) {
             console.error(e);
+        }
+    }
+
+    async function confirmDelete() {
+        if (!playlistToDelete || isDeleting) return;
+        isDeleting = true;
+        try {
+            await apiRequest(`/api/playlists/${playlistToDelete.id}`, {method: 'DELETE'});
+            const all = await apiRequest('/api/playlists');
+            userPlaylists.set(all);
+            addToast(`Deleted "${playlistToDelete.name}"`, 'info');
+            playlistToDelete = null;
+        } catch {
+            addToast('Failed to delete playlist', 'error');
+        } finally {
+            isDeleting = false;
         }
     }
 </script>
@@ -66,9 +88,40 @@
                 <div class="pl-name">{pl.name}</div>
                 <div class="pl-count">{pl.tracks.length} songs</div>
             </div>
+            {#if !SYSTEM.has(pl.name)}
+                <button class="delete-btn" title="Delete playlist"
+                        on:click|stopPropagation={() => playlistToDelete = pl}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                        <path d="M10 11v6M14 11v6"></path>
+                        <path d="M9 6V4h6v2"></path>
+                    </svg>
+                </button>
+            {/if}
         </div>
     {/each}
 </div>
+
+<!-- Delete confirm modal -->
+{#if playlistToDelete}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="modal-backdrop" on:click={() => { if (!isDeleting) playlistToDelete = null; }}>
+        <div class="modal" on:click|stopPropagation>
+            <h3>Delete playlist?</h3>
+            <p>"{playlistToDelete.name}" will be permanently deleted.</p>
+            <div class="modal-actions">
+                <button class="cancel-btn" on:click={() => playlistToDelete = null} disabled={isDeleting}>
+                    Cancel
+                </button>
+                <button class="danger-btn" on:click={confirmDelete} disabled={isDeleting}>
+                    {isDeleting ? 'Deleting…' : 'Delete'}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
 
 <style>
     .library-actions {
@@ -87,7 +140,7 @@
     .playlist-grid {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 8px;
     }
 
     .pl-card {
@@ -98,12 +151,16 @@
         padding: 12px;
         border-radius: 8px;
         cursor: pointer;
-        transition: 0.2s;
+        transition: background 0.15s, transform 0.15s;
     }
 
     .pl-card:hover {
         background: var(--bg-hover);
         transform: translateX(4px);
+    }
+
+    .pl-card:hover .delete-btn {
+        opacity: 1;
     }
 
     .pl-art {
@@ -143,5 +200,101 @@
     .pl-count {
         font-size: 13px;
         color: var(--text-secondary);
+    }
+
+    .delete-btn {
+        flex-shrink: 0;
+        background: transparent;
+        color: var(--text-secondary);
+        padding: 8px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s, background 0.15s;
+    }
+
+    .delete-btn:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+
+    @media (hover: none) {
+        .delete-btn {
+            opacity: 1;
+        }
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 28px 24px 20px;
+        width: 340px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .modal h3 {
+        font-size: 17px;
+        font-weight: 700;
+    }
+
+    .modal p {
+        font-size: 14px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .cancel-btn {
+        background: transparent;
+        color: var(--text-secondary);
+        padding: 9px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .cancel-btn:hover:not(:disabled) {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+
+    .danger-btn {
+        background: #ef4444;
+        color: #fff;
+        padding: 9px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .danger-btn:hover:not(:disabled) {
+        background: #dc2626;
+    }
+
+    .danger-btn:disabled,
+    .cancel-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
     }
 </style>

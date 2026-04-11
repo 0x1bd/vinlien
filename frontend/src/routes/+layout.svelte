@@ -149,7 +149,7 @@
 
             <div class="sidebar-playlists">
                 <div class="playlists-header">
-                    <h3>Your Library</h3>
+                    <a href="/library" class="library-heading" class:active={$page.url.pathname === '/library'}>Your Library</a>
                     <button class="add-pl-btn" on:click={startCreatePlaylist}>+</button>
                 </div>
                 <div class="pl-list">
@@ -369,11 +369,21 @@
         margin-bottom: 12px;
     }
 
-    .playlists-header h3 {
+    .library-heading {
         font-size: 12px;
         color: var(--text-secondary);
         font-weight: 700;
         text-transform: uppercase;
+        text-decoration: none;
+        letter-spacing: 0.05em;
+    }
+
+    .library-heading:hover {
+        color: var(--text-primary);
+    }
+
+    .library-heading.active {
+        color: var(--text-primary);
     }
 
     .add-pl-btn {

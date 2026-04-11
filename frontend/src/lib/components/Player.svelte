@@ -664,6 +664,36 @@
         display: none;
     }
 
+    @media (min-width: 601px) and (max-width: 1060px) {
+        .time-display {
+            display: none;
+        }
+
+        .volume-slider {
+            display: none;
+        }
+
+        .right-group {
+            gap: 4px;
+        }
+    }
+
+    @media (min-width: 601px) and (max-width: 860px) {
+        .right-group {
+            display: none;
+        }
+
+        .transport-group {
+            width: auto;
+            flex: 0 0 auto;
+        }
+
+        .data-group {
+            flex: 1;
+            width: auto;
+        }
+    }
+
     @media (max-width: 600px) {
         .player-wrapper {
             left: 0;

@@ -1,28 +1,28 @@
 <script lang="ts">
     import {page} from '$app/stores';
+    import {goto} from '$app/navigation';
     import {queue, currentTrackIndex, isPlaying, userPlaylists} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
+    import {addToast} from '$lib/utils/toast';
     import TrackRow from '$lib/components/TrackRow.svelte';
     import type {Playlist} from '$lib/utils/types';
 
     $: selectedPlaylistId = $page.params.id;
     let playlist: Playlist | null = null;
     let draggedIdx: number | null = null;
+    let dragoverIdx: number | null = null;
 
     let showEditModal = false;
     let editName = "";
     let editDescription = "";
     let editImageUrl = "";
     let isSaving = false;
+    let isDeleting = false;
+    let showDeleteConfirm = false;
 
     $: if (selectedPlaylistId) {
         apiRequest('/api/playlists').then((all: Playlist[]) => {
             playlist = all.find(p => p.id === selectedPlaylistId) || null;
-            if (playlist) {
-                editName = playlist.name;
-                editDescription = playlist.description || "";
-                editImageUrl = playlist.imageUrl || "";
-            }
         });
     }
 
@@ -53,6 +53,15 @@
         $isPlaying = true;
     }
 
+    function openEditModal() {
+        if (!playlist) return;
+        editName = playlist.name;
+        editDescription = playlist.description || "";
+        editImageUrl = playlist.imageUrl || "";
+        showDeleteConfirm = false;
+        showEditModal = true;
+    }
+
     async function savePlaylistInfo() {
         if (!playlist || !editName.trim()) return;
         isSaving = true;
@@ -68,11 +77,27 @@
             const all: Playlist[] = await apiRequest('/api/playlists');
             userPlaylists.set(all);
             playlist = all.find(p => p.id === playlist!.id) || null;
+            addToast('Playlist updated', 'success');
             showEditModal = false;
         } catch (e) {
-            console.error("Failed to update playlist info", e);
+            addToast('Failed to update playlist', 'error');
         } finally {
             isSaving = false;
+        }
+    }
+
+    async function deletePlaylist() {
+        if (!playlist) return;
+        isDeleting = true;
+        try {
+            await apiRequest(`/api/playlists/${playlist.id}`, {method: 'DELETE'});
+            const all: Playlist[] = await apiRequest('/api/playlists');
+            userPlaylists.set(all);
+            addToast('Playlist deleted', 'info');
+            goto('/library');
+        } catch (e) {
+            addToast('Failed to delete playlist', 'error');
+            isDeleting = false;
         }
     }
 
@@ -85,32 +110,43 @@
 
     function handleDragOver(e: DragEvent, idx: number) {
         e.preventDefault();
-        if (e.dataTransfer) {
-            e.dataTransfer.dropEffect = 'move';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        if (draggedIdx !== null && draggedIdx !== idx) {
+            dragoverIdx = idx;
         }
+    }
+
+    function handleDragLeave(e: DragEvent, idx: number) {
+        if (dragoverIdx === idx) dragoverIdx = null;
     }
 
     async function handleDrop(e: DragEvent, idx: number) {
         e.preventDefault();
+        dragoverIdx = null;
         if (draggedIdx === null || draggedIdx === idx || !playlist) return;
 
         const newTracks = [...playlist.tracks];
         const [movedTrack] = newTracks.splice(draggedIdx, 1);
         newTracks.splice(idx, 0, movedTrack);
 
-        playlist.tracks = newTracks;
+        playlist = {...playlist, tracks: newTracks};
         draggedIdx = null;
 
         try {
             await apiRequest(`/api/playlists/${playlist.id}/tracks`, {
                 method: 'PUT',
-                body: playlist.tracks
+                body: newTracks
             });
             const all: Playlist[] = await apiRequest('/api/playlists');
             userPlaylists.set(all);
         } catch (err) {
-            console.error("Failed to reorder tracks", err);
+            addToast('Failed to reorder tracks', 'error');
         }
+    }
+
+    function handleDragEnd() {
+        draggedIdx = null;
+        dragoverIdx = null;
     }
 </script>
 
@@ -150,7 +186,7 @@
                 </button>
 
                 {#if !isSystemPlaylist}
-                    <button class="icon-btn" on:click={() => showEditModal = true} title="Edit Details">
+                    <button class="icon-btn" on:click={openEditModal} title="Edit Details">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -166,37 +202,40 @@
         {#each playlist.tracks as track, i (track.id + i)}
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <div
-                    draggable="true"
-                    on:dragstart={(e) => handleDragStart(e, i)}
-                    on:dragover={(e) => handleDragOver(e, i)}
-                    on:drop={(e) => handleDrop(e, i)}
-                    class="draggable-row"
-                    class:dragging={draggedIdx === i}
+                draggable="true"
+                on:dragstart={(e) => handleDragStart(e, i)}
+                on:dragover={(e) => handleDragOver(e, i)}
+                on:dragleave={(e) => handleDragLeave(e, i)}
+                on:drop={(e) => handleDrop(e, i)}
+                on:dragend={handleDragEnd}
+                class="draggable-row"
+                class:dragging={draggedIdx === i}
+                class:dragover={dragoverIdx === i && draggedIdx !== i}
             >
                 <TrackRow {track} onPlay={() => playTrackAtIndex(i)}/>
             </div>
         {/each}
         {#if playlist.tracks.length === 0}
             <div class="empty-state">
-                <p>It's quiet in here...</p>
+                <p>It's quiet in here…</p>
                 <p style="font-size: 13px; color: var(--text-secondary);">Search for tracks and add them to this
                     playlist.</p>
             </div>
         {/if}
     </div>
 {:else}
-    <div class="empty-state">Loading playlist...</div>
+    <div class="empty-state">Loading playlist…</div>
 {/if}
 
 <!-- Edit Playlist Modal -->
 {#if showEditModal}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="modal-backdrop" on:click={() => showEditModal = false}>
+    <div class="modal-backdrop" on:click={() => { showEditModal = false; showDeleteConfirm = false; }}>
         <div class="modal-content" on:click|stopPropagation>
             <div class="modal-header">
                 <h3>Edit Details</h3>
-                <button class="icon-btn" on:click={() => showEditModal = false}>
+                <button class="icon-btn" on:click={() => { showEditModal = false; showDeleteConfirm = false; }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -217,13 +256,32 @@
 
             <div class="form-group">
                 <label for="pl-img">Image URL</label>
-                <input id="pl-img" type="text" bind:value={editImageUrl} placeholder="https://..."/>
+                <input id="pl-img" type="text" bind:value={editImageUrl} placeholder="https://…"/>
             </div>
 
             <div class="modal-actions">
-                <button on:click={savePlaylistInfo} disabled={isSaving || !editName.trim()}>
-                    {isSaving ? 'Saving...' : 'Save'}
-                </button>
+                {#if showDeleteConfirm}
+                    <div class="delete-confirm">
+                        <span>Delete this playlist?</span>
+                        <button class="danger-btn" on:click={deletePlaylist} disabled={isDeleting}>
+                            {isDeleting ? 'Deleting…' : 'Yes, delete'}
+                        </button>
+                        <button class="cancel-btn" on:click={() => showDeleteConfirm = false}>Cancel</button>
+                    </div>
+                {:else}
+                    <button class="delete-icon-btn" on:click={() => showDeleteConfirm = true} title="Delete playlist">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                            <path d="M10 11v6M14 11v6"></path>
+                            <path d="M9 6V4h6v2"></path>
+                        </svg>
+                        Delete playlist
+                    </button>
+                    <button class="save-btn" on:click={savePlaylistInfo} disabled={isSaving || !editName.trim()}>
+                        {isSaving ? 'Saving…' : 'Save'}
+                    </button>
+                {/if}
             </div>
         </div>
     </div>
@@ -313,6 +371,21 @@
         background: #1d4ed8;
     }
 
+    .icon-btn {
+        background: transparent;
+        color: var(--text-secondary);
+        padding: 8px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .icon-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+
     .track-list {
         display: flex;
         flex-direction: column;
@@ -320,13 +393,19 @@
     }
 
     .draggable-row {
-        transition: opacity 0.2s;
+        transition: opacity 0.15s, background 0.1s;
+        border-radius: 6px;
     }
 
     .draggable-row.dragging {
-        opacity: 0.4;
+        opacity: 0.35;
         background: var(--bg-hover);
-        border-radius: 6px;
+    }
+
+    .draggable-row.dragover {
+        background: rgba(37, 99, 235, 0.15);
+        outline: 2px solid var(--accent-color);
+        outline-offset: -2px;
     }
 
     .empty-state {
@@ -403,8 +482,86 @@
 
     .modal-actions {
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
+        align-items: center;
         margin-top: 8px;
+        gap: 8px;
+    }
+
+    .save-btn {
+        background: var(--accent-color);
+        color: #fff;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-left: auto;
+    }
+
+    .save-btn:hover:not(:disabled) {
+        background: #1d4ed8;
+    }
+
+    .save-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .delete-icon-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 13px;
+        padding: 6px 8px;
+        border-radius: 6px;
+    }
+
+    .delete-icon-btn:hover {
+        color: var(--danger-color, #ef4444);
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+    .delete-confirm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .delete-confirm span {
+        font-size: 13px;
+        color: var(--text-secondary);
+        flex: 1;
+    }
+
+    .danger-btn {
+        background: var(--danger-color, #ef4444);
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .danger-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .cancel-btn {
+        background: transparent;
+        color: var(--text-secondary);
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+    }
+
+    .cancel-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
     }
 
     @media (max-width: 768px) {
@@ -421,6 +578,10 @@
 
         .action-row {
             justify-content: center;
+        }
+
+        .modal-content {
+            width: calc(100vw - 32px);
         }
     }
 </style>
