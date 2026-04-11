@@ -13,6 +13,10 @@ private val VERSION_WORDS = setOf(
 
 class AggregationEngine(private val providers: List<MusicProvider>) {
 
+    init {
+        BackendDebugger.logProviders(providers)
+    }
+
     private val streamResolver = StreamResolver(providers)
 
     private fun <T> providerFlow(
@@ -23,9 +27,15 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
             launch {
                 val result = withTimeoutOrNull(provider.timeoutMs) {
                     Profiler.measure("${provider.name} ${capability.name}") {
-                        runCatching { block(provider) }.getOrNull()
+                        runCatching { block(provider) }.onFailure { e ->
+                            BackendDebugger.logError(provider.id, capability.name, e)
+                        }.getOrNull()
                     }
-                } ?: return@launch
+                }
+                if (result == null) {
+                    BackendDebugger.logTimeout(provider.id, capability.name)
+                    return@launch
+                }
                 if (result.isNotEmpty()) send(result)
             }
         }
@@ -63,19 +73,19 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
             .filter { capability in it.capabilities }
             .map { provider ->
                 async {
-                    withTimeoutOrNull(provider.timeoutMs) {
+                    val result = withTimeoutOrNull(provider.timeoutMs) {
                         Profiler.measure("${provider.name} ${capability.name}") {
-                            runCatching { block(provider) }.getOrNull()
+                            runCatching { block(provider) }.onFailure { e ->
+                                BackendDebugger.logError(provider.id, capability.name, e)
+                            }.getOrNull()
                         }
                     }
+                    if (result == null) BackendDebugger.logTimeout(provider.id, capability.name)
+                    result
                 }
             }
             .awaitAll()
             .filterNotNull()
-            .map {
-                @Suppress("UNCHECKED_CAST")
-                it as T
-            }
     }
 
     suspend fun searchTracks(query: String): List<Track> {
@@ -184,6 +194,10 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         nativeId.startsWith("mb:album:") -> {
             val parts = nativeId.removePrefix("mb:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
+        }
+        nativeId.startsWith("deezer:album:") -> {
+            val parts = nativeId.removePrefix("deezer:album:").split(":::", limit = 3)
+            if (parts.size == 3) parts[1] to parts[2] else null
         }
         else -> null
     }

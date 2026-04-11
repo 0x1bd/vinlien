@@ -83,7 +83,7 @@ private data class InvidiousStream(
 class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:3000") : MusicProvider {
     override val id = "invidious"
     override val name = "Invidious"
-    override val capabilities = setOf(Capability.RECOMMENDATIONS, Capability.AUDIO_STREAM)
+    override val capabilities = setOf(Capability.AUDIO_STREAM)
 
     private val logger = LoggerFactory.getLogger(LocalInvidiousBackend::class.java)
 
@@ -96,22 +96,6 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
     }
 
     override suspend fun searchAudio(query: String): List<Track> = search(query)
-
-    override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {
-        try {
-            val videoId: String = when {
-                track.id.matches(YT_ID_REGEX) -> track.id
-                else -> {
-                    search("${track.artist} ${track.title}").firstOrNull()?.id
-                        ?: return@withContext emptyList()
-                }
-            }
-            sharedJson.decodeFromString<InvidiousVideoDetails>(fetch(apiUrl("videos/$videoId")))
-                .recommendedVideos.mapNotNull { it.toTrack() }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
 
     override suspend fun resolveStream(track: Track): String? = withContext(Dispatchers.IO) {
         try {

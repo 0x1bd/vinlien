@@ -18,6 +18,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.backends.Capability
+import org.kvxd.vinlien.backends.deezer.DeezerMetadataProvider
 import org.kvxd.vinlien.backends.invidious.LocalInvidiousBackend
 import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
@@ -68,6 +69,7 @@ fun Application.module() {
     }
 
     val providers = buildList {
+        add(DeezerMetadataProvider())
         if (Config.data.lastFmApiKey.isNotBlank()) {
             add(LastFmMetadataProvider(Config.data.lastFmApiKey, Config.data.lastFmUsername))
         }

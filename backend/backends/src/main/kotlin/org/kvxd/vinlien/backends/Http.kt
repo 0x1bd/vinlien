@@ -23,3 +23,20 @@ internal suspend fun fetch(url: String, headersMap: Map<String, String> = emptyM
     if (!response.status.isSuccess()) throw Exception("HTTP ${response.status.value} for $url")
     return response.bodyAsText()
 }
+
+internal suspend fun fetchDebug(
+    url: String,
+    headersMap: Map<String, String> = emptyMap(),
+    providerId: String,
+    capability: String
+): String {
+    BackendDebugger.logRequest(providerId, capability, url)
+    return try {
+        val body = fetch(url, headersMap)
+        BackendDebugger.logResponse(providerId, capability, -1, body)
+        body
+    } catch (e: Exception) {
+        BackendDebugger.logError(providerId, capability, e, url)
+        throw e
+    }
+}
