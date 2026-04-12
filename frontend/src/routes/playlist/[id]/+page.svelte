@@ -48,8 +48,8 @@
 
     function playTrackAtIndex(index: number) {
         if (!playlist) return;
-        $queue = [playlist.tracks[index]];
-        $currentTrackIndex = 0;
+        $queue = [...playlist.tracks];
+        $currentTrackIndex = index;
         $isPlaying = true;
     }
 
@@ -137,11 +137,12 @@
                 method: 'PUT',
                 body: newTracks
             });
-            const all: Playlist[] = await apiRequest('/api/playlists');
-            userPlaylists.set(all);
         } catch (err) {
             addToast('Failed to reorder tracks', 'error');
         }
+        apiRequest('/api/playlists').then((all: Playlist[]) => {
+            if (all) userPlaylists.set(all);
+        }).catch(() => {});
     }
 
     function handleDragEnd() {

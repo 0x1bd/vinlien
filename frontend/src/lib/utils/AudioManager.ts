@@ -9,7 +9,8 @@ import {
     repeatMode,
     user,
     silenceSkip,
-    silenceSkipThreshold
+    silenceSkipThreshold,
+    useRecommendations
 } from '$lib/utils/store';
 import {apiRequest} from '$lib/utils/api';
 import type {Track} from '$lib/utils/types';
@@ -293,7 +294,7 @@ class AudioManager {
         else if (rm === REPEAT_ALL) nextTrack = q[0];
         else fetchRecs = true;
 
-        if (fetchRecs) {
+        if (fetchRecs && get(useRecommendations)) {
             this.isFetchingRec = true;
             try {
                 const recs = await apiRequest('/api/recommendations', {method: 'POST', body: {queue: q}});
@@ -335,6 +336,12 @@ class AudioManager {
 
         if (rm === REPEAT_ALL && !force) {
             currentTrackIndex.set(0);
+            return;
+        }
+
+        if (!get(useRecommendations)) {
+            isPlaying.set(false);
+            audioProgress.set(0);
             return;
         }
 

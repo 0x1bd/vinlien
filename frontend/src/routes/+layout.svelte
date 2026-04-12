@@ -13,6 +13,7 @@
     import {audioManager} from '$lib/utils/AudioManager';
     import Player from '$lib/components/Player.svelte';
     import AddToPlaylistModal from '$lib/components/AddToPlaylistModal.svelte';
+    import SearchBar from '$lib/components/SearchBar.svelte';
 
     let hasLoadedPlaylists = false;
     let isCreatingPlaylist = false;
@@ -208,6 +209,7 @@
 
         <main class="content">
             <div class="main-view-inner">
+                <SearchBar/>
                 <slot/>
             </div>
         </main>

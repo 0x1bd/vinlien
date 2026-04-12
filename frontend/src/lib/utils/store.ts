@@ -55,6 +55,7 @@ export const trackToAdd = writable<Track | null>(null);
 export const silenceSkip = createPersistedStore<boolean>('vinlien_silenceSkip', false);
 export const silenceSkipThreshold = createPersistedStore<number>('vinlien_silenceSkipThreshold', 2);
 export const theme = createPersistedStore<ThemeId>('vinlien_theme', 'dark');
+export const useRecommendations = createPersistedStore<boolean>('vinlien_useRecommendations', true);
 
 export const currentTrack = derived(
     [queue, currentTrackIndex],

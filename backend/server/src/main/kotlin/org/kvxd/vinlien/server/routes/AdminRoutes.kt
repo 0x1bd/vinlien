@@ -7,12 +7,11 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
@@ -25,14 +24,11 @@ import org.mindrot.jbcrypt.BCrypt
 
 fun Route.adminRoutes() {
 
-    fun isRequesterAdmin(call: ApplicationCall): Boolean {
+    suspend fun isRequesterAdmin(call: ApplicationCall): Boolean {
         val username = call.principal<JWTPrincipal>()?.payload?.getClaim("username")?.asString() ?: return false
-        return Database.connect(Config.data.dbUrl, "org.postgresql.Driver", Config.data.dbUser, Config.data.dbPass)
-            .let {
-                transaction {
-                    Users.selectAll().where { (Users.username eq username) and (Users.role eq "ADMIN") }.count() > 0
-                }
-            }
+        return dbQuery {
+            Users.selectAll().where { (Users.username eq username) and (Users.role eq "ADMIN") }.count() > 0
+        }
     }
 
     get("/api/admin/stats") {
@@ -106,6 +102,14 @@ fun Route.adminRoutes() {
         }
 
         dbQuery {
+            History.deleteWhere { History.userId eq id }
+            val playlistIds = Playlists.selectAll()
+                .where { Playlists.userId eq id }
+                .map { it[Playlists.id] }
+            if (playlistIds.isNotEmpty()) {
+                PlaylistTracks.deleteWhere { PlaylistTracks.playlistId inList playlistIds }
+            }
+            Playlists.deleteWhere { Playlists.userId eq id }
             Users.deleteWhere { Users.id eq id }
         }
         call.respond(HttpStatusCode.OK)

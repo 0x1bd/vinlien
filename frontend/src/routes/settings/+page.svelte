@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {showVolumeSlider, silenceSkip, silenceSkipThreshold, theme} from '$lib/utils/store';
+    import {showVolumeSlider, silenceSkip, silenceSkipThreshold, theme, useRecommendations} from '$lib/utils/store';
     import {themes} from '$lib/utils/themes';
 </script>
 
@@ -31,6 +31,17 @@
                 </button>
             {/each}
         </div>
+    </div>
+
+    <div class="setting-item">
+        <div class="info">
+            <h3>Autoplay</h3>
+            <p>When the queue ends, automatically play recommended tracks. Disable to stop after the last track.</p>
+        </div>
+        <label class="switch">
+            <input type="checkbox" bind:checked={$useRecommendations}>
+            <span class="slider"></span>
+        </label>
     </div>
 
     <div class="setting-item">
