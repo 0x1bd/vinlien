@@ -150,7 +150,13 @@ class DeezerMetadataProvider : MusicProvider {
                 apiUrl("search", "q" to query, "limit" to "25"),
                 "TRACK_SEARCH"
             )
+            val queryTokens = query.lowercase().split(Regex("\\s+")).filter { it.length >= 3 }
             val tracks = res.data.mapNotNull { it.toDomainTrack() }
+                .filter { track ->
+                    if (queryTokens.isEmpty()) return@filter true
+                    val haystack = "${track.title} ${track.artist}".lowercase()
+                    queryTokens.any { token -> haystack.contains(token) }
+                }
             BackendDebugger.logResponse(id, "TRACK_SEARCH", tracks.size, "")
             tracks
         } catch (e: Exception) {

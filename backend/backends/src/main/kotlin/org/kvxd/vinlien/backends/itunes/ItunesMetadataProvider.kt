@@ -83,7 +83,6 @@ class ItunesMetadataProvider : MusicProvider {
         Capability.TRACK_SEARCH,
         Capability.ALBUM_SEARCH,
         Capability.ARTIST_ALBUMS,
-        Capability.ALBUM_TRACKS,
         Capability.RECOMMENDATIONS,
         Capability.TRENDING
     )
@@ -107,41 +106,6 @@ class ItunesMetadataProvider : MusicProvider {
         fetchParsed<ItunesResponse>(
             "https://itunes.apple.com/search?term=${artist.urlEncoded}&entity=album&attribute=allArtistTerm&limit=50"
         ).results.filter { (it.trackCount ?: 1) > 1 }.mapNotNull { it.toAlbum() }
-    }
-
-    override suspend fun getAlbum(artist: String, albumTitle: String): Album? = withContext(Dispatchers.IO) {
-        try {
-            val searchRes = fetchParsed<ItunesResponse>(
-                "https://itunes.apple.com/search?term=${"$artist $albumTitle".urlEncoded}&entity=album&limit=10"
-            )
-            val match = searchRes.results.firstOrNull { r ->
-                r.collectionName?.equals(albumTitle, ignoreCase = true) == true &&
-                        r.artistName?.lowercase()?.contains(artist.lowercase()) == true
-            } ?: searchRes.results.firstOrNull { r ->
-                r.collectionName?.contains(albumTitle, ignoreCase = true) == true &&
-                        r.artistName?.lowercase()?.contains(artist.lowercase()) == true
-            }
-
-            val collectionId = match?.collectionId ?: return@withContext null
-            fetchAlbumById(collectionId)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private suspend fun fetchAlbumById(collectionId: Long): Album? {
-        val res = fetchParsed<ItunesResponse>(
-            "https://itunes.apple.com/lookup?id=$collectionId&entity=song"
-        )
-        var album: Album? = null
-        val tracks = mutableListOf<Track>()
-        for (el in res.results) {
-            when (el.wrapperType) {
-                "collection" -> album = el.toAlbum()
-                "track" -> el.toTrack()?.let { tracks.add(it) }
-            }
-        }
-        return album?.copy(tracks = tracks)
     }
 
     override suspend fun getRecommendations(track: Track): List<Track> = withContext(Dispatchers.IO) {

@@ -9,7 +9,7 @@ private fun String.primaryArtistPart(): String =
         .firstOrNull()?.normalized() ?: normalized()
 
 object TrackMerger {
-    private fun Track.fingerprint() = "${artist.normalized()}:::${title.normalized()}"
+    private fun Track.fingerprint() = "${artist.primaryArtistPart()}:::${title.normalized()}"
 
     fun merge(tracks: List<Track>): List<Track> =
         tracks.groupBy { it.fingerprint() }
@@ -18,10 +18,12 @@ object TrackMerger {
 
     private fun mergeGroup(group: List<Track>): Track {
         val primary = group.maxByOrNull { it.artists.size } ?: group.first()
+        val mergedArtists = group.flatMap { it.artists }.distinctBy { it.normalized() }.ifEmpty { primary.artists }
         return primary.copy(
             artworkUrl = group.mapNotNull { it.artworkUrl }.firstOrNull() ?: primary.artworkUrl,
             durationMs = group.firstOrNull { it.durationMs > 0 }?.durationMs ?: primary.durationMs,
-            artists = group.flatMap { it.artists }.distinct().ifEmpty { primary.artists },
+            artist = mergedArtists.joinToString(", "),
+            artists = mergedArtists,
             lastFmUrl = group.mapNotNull { it.lastFmUrl }.firstOrNull() ?: primary.lastFmUrl
         )
     }
