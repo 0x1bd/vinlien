@@ -7,7 +7,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.kvxd.vinlien.backends.Normalizer
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Track
 import org.mindrot.jbcrypt.BCrypt
 
 object Users : Table("vl_users") {

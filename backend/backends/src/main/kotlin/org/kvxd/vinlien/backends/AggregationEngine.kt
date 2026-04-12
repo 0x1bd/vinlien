@@ -2,10 +2,10 @@ package org.kvxd.vinlien.backends
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import org.kvxd.vinlien.shared.Album
-import org.kvxd.vinlien.shared.ArtistInfo
-import org.kvxd.vinlien.shared.SearchResponse
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Album
+import org.kvxd.vinlien.shared.models.ArtistInfo
+import org.kvxd.vinlien.shared.models.SearchResponse
+import org.kvxd.vinlien.shared.models.Track
 
 private val VERSION_WORDS = setOf(
     "acoustic", "live", "instrumental", "karaoke", "cover", "demo", "unplugged", "remix"

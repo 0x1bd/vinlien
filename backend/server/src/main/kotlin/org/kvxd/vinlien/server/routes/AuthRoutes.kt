@@ -15,7 +15,8 @@ import org.jetbrains.exposed.sql.update
 import org.kvxd.vinlien.server.Config
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.server.Users
-import org.kvxd.vinlien.shared.*
+import org.kvxd.vinlien.shared.models.ChangePasswordReq
+import org.kvxd.vinlien.shared.models.User
 import org.mindrot.jbcrypt.BCrypt
 import java.util.Date
 import java.util.UUID

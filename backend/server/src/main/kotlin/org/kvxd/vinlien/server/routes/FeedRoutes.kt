@@ -11,8 +11,8 @@ import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.server.DatabaseFactory.toTrack
-import org.kvxd.vinlien.shared.HomeFeed
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.HomeFeed
+import org.kvxd.vinlien.shared.models.Track
 
 internal val trendingCache = TtlCache<String, List<Track>>(ttlMs = 30 * 60 * 1000L)
 private const val TRENDING_CACHE_KEY = "trending"

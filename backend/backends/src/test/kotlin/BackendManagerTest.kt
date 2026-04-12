@@ -10,7 +10,7 @@ import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
 import org.kvxd.vinlien.backends.musicbrainz.MusicBrainzMetadataProvider
 import org.kvxd.vinlien.backends.soundcloud.SoundCloudBackend
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Track
 import java.util.UUID
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)

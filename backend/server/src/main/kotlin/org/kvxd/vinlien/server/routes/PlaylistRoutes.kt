@@ -12,8 +12,8 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.server.DatabaseFactory.toTrack
-import org.kvxd.vinlien.shared.Playlist
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Playlist
+import org.kvxd.vinlien.shared.models.Track
 import java.util.UUID
 
 @Serializable

@@ -16,7 +16,11 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.shared.*
+import org.kvxd.vinlien.shared.models.AdminStats
+import org.kvxd.vinlien.shared.models.AdminStatsResponse
+import org.kvxd.vinlien.shared.models.ChangePasswordReq
+import org.kvxd.vinlien.shared.models.User
+import org.kvxd.vinlien.shared.models.UserStat
 import org.mindrot.jbcrypt.BCrypt
 
 fun Route.adminRoutes() {

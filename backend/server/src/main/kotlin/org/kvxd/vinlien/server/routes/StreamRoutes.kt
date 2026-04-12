@@ -9,7 +9,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
 import org.kvxd.vinlien.backends.AggregationEngine
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Track
 import org.slf4j.LoggerFactory
 import java.io.File
 

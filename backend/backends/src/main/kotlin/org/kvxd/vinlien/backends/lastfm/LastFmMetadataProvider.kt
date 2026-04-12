@@ -13,9 +13,9 @@ import org.kvxd.vinlien.backends.MusicProvider
 import org.kvxd.vinlien.backends.Normalizer
 import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
-import org.kvxd.vinlien.shared.Album
-import org.kvxd.vinlien.shared.ArtistInfo
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Album
+import org.kvxd.vinlien.shared.models.ArtistInfo
+import org.kvxd.vinlien.shared.models.Track
 import java.net.URLDecoder
 import java.net.URLEncoder
 

@@ -1,8 +1,8 @@
 package org.kvxd.vinlien.backends
 
-import org.kvxd.vinlien.shared.Album
-import org.kvxd.vinlien.shared.ArtistInfo
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.Album
+import org.kvxd.vinlien.shared.models.ArtistInfo
+import org.kvxd.vinlien.shared.models.Track
 
 enum class Capability {
     TRACK_SEARCH,

@@ -14,8 +14,8 @@ import org.jetbrains.exposed.sql.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.shared.SearchResponse
-import org.kvxd.vinlien.shared.Track
+import org.kvxd.vinlien.shared.models.SearchResponse
+import org.kvxd.vinlien.shared.models.Track
 
 private val sseJson = Json { encodeDefaults = true }
 
