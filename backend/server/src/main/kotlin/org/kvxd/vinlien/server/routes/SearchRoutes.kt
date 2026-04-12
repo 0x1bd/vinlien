@@ -102,9 +102,7 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         fun isAlreadySeen(candidateTitle: String): Boolean {
             val fingerprint = TrackDeduplicator.fingerprint(candidateTitle)
             if (fingerprint.isBlank()) return false
-            return seenTitleFingerprints.any {
-                it == fingerprint || (fingerprint.length > 4 && (it.contains(fingerprint) || fingerprint.contains(it)))
-            }
+            return seenTitleFingerprints.any { it == fingerprint }
         }
 
         val recs = engine.getRecommendations(currentTrack)
