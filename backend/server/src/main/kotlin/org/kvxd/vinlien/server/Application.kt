@@ -12,7 +12,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.plugins.cors.routing.*
+import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -41,15 +41,18 @@ fun Application.module() {
     }
     install(ContentNegotiation) { json() }
     install(io.ktor.server.sse.SSE)
-    install(CORS) {
-        allowHost("localhost:5173")
-        allowHost("127.0.0.1:5173")
-        Config.data.allowedOrigins.forEach { host ->
-            allowHost(host, schemes = listOf("http", "https"))
+
+    intercept(ApplicationCallPipeline.Plugins) {
+        val origin = call.request.headers[HttpHeaders.Origin] ?: return@intercept
+        call.response.header(HttpHeaders.AccessControlAllowOrigin, origin)
+        call.response.header(HttpHeaders.AccessControlAllowCredentials, "true")
+        call.response.header(HttpHeaders.AccessControlAllowHeaders, "Content-Type, Authorization")
+        call.response.header(HttpHeaders.AccessControlAllowMethods, "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+        if (call.request.httpMethod == HttpMethod.Options) {
+            call.response.header(HttpHeaders.AccessControlMaxAge, "86400")
+            call.respond(HttpStatusCode.OK)
+            finish()
         }
-        allowCredentials = true
-        allowHeader(HttpHeaders.Authorization)
-        allowHeader(HttpHeaders.ContentType)
     }
 
     install(Authentication) {
