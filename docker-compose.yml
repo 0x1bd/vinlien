@@ -92,8 +92,6 @@ services:
       - DB_USER=appuser
       - DB_PASSWORD=${DB_PASSWORD:-dbpassword}
       - INVIDIOUS_URL=http://invidious:3000
-      # Comma-separated list of allowed origins for CORS
-      - ALLOWED_ORIGINS=YOUR_DOMAIN
 
       # Uncomment these if you want to use env vars instead of config.json
       # - LASTFM_API_KEY=${LASTFM_API_KEY}

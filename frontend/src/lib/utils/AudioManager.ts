@@ -8,8 +8,6 @@ import {
     isMuted,
     repeatMode,
     user,
-    silenceSkip,
-    silenceSkipThreshold,
     useRecommendations
 } from '$lib/utils/store';
 import {apiRequest} from '$lib/utils/api';
@@ -24,7 +22,6 @@ const REPEAT_ALL = 1;
 const REPEAT_ONE = 2;
 
 const PRELOAD_SECONDS_BEFORE_END = 15;
-const SILENCE_RMS_THRESHOLD = 0.005;
 
 declare global {
     interface Window {
@@ -52,11 +49,6 @@ class AudioManager {
     private isFetchingRec = false;
     private lastPositionReportSec = -1;
 
-    private audioContext: AudioContext | null = null;
-    private analyserNode: AnalyserNode | null = null;
-    private analyserBuffer: Float32Array | null = null;
-    private silenceStartTime: number | null = null;
-
     constructor() {
         this.audio.autoplay = true;
         this.preloadAudio.preload = 'auto';
@@ -65,12 +57,6 @@ class AudioManager {
             if (!u) {
                 this.audio.pause();
                 this.preloadAudio.removeAttribute('src');
-            }
-        });
-
-        this.audio.addEventListener('play', () => {
-            if (this.audioContext?.state === 'suspended') {
-                this.audioContext.resume().catch(() => {});
             }
         });
 
@@ -90,24 +76,6 @@ class AudioManager {
             const remaining = dur - cur;
             if (dur > 1 && remaining <= PRELOAD_SECONDS_BEFORE_END && remaining > 0) {
                 this.preloadNextTrackIfNeeded();
-            }
-
-            if (get(silenceSkip) && dur > 1) {
-                if (!this.audioContext) this.initAudioContext();
-                if (this.analyserNode) {
-                    const rms = this.getRms();
-                    const threshold = get(silenceSkipThreshold);
-                    if (rms < SILENCE_RMS_THRESHOLD) {
-                        if (this.silenceStartTime === null) this.silenceStartTime = cur;
-                        else if (cur - this.silenceStartTime >= threshold) {
-                            this.silenceStartTime = null;
-                            if (cur < dur / 2) this.audio.currentTime = cur + threshold;
-                            else this.playNext();
-                        }
-                    } else {
-                        this.silenceStartTime = null;
-                    }
-                }
             }
         });
 
@@ -136,7 +104,6 @@ class AudioManager {
         currentTrack.subscribe(track => {
             if (track) {
                 this.preloadAttemptedForTrack = null;
-                this.silenceStartTime = null;
                 this.lastPositionReportSec = -1;
 
                 const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
@@ -249,30 +216,6 @@ class AudioManager {
                 position: this.audio.currentTime
             });
         }
-    }
-
-    private initAudioContext() {
-        try {
-            this.audioContext = new AudioContext();
-            const source = this.audioContext.createMediaElementSource(this.audio);
-            this.analyserNode = this.audioContext.createAnalyser();
-            this.analyserNode.fftSize = 2048;
-            this.analyserBuffer = new Float32Array(this.analyserNode.fftSize);
-            source.connect(this.analyserNode);
-            this.analyserNode.connect(this.audioContext.destination);
-        } catch (e) {
-            console.warn('[silence] AudioContext init failed:', e);
-            this.audioContext = null;
-            this.analyserNode = null;
-        }
-    }
-
-    private getRms(): number {
-        if (!this.analyserNode || !this.analyserBuffer) return 1;
-        this.analyserNode.getFloatTimeDomainData(this.analyserBuffer);
-        let sum = 0;
-        for (const s of this.analyserBuffer) sum += s * s;
-        return Math.sqrt(sum / this.analyserBuffer.length);
     }
 
     private async preloadNextTrackIfNeeded() {

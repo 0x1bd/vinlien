@@ -50,6 +50,7 @@ export async function apiRequest(endpoint: string, options: ApiRequestOptions = 
         }
 
         const refreshOk = await refreshPromise;
+        refreshPromise = null;
 
         if (refreshOk) {
             res = await fetch(endpoint, requestOptions);
