@@ -1,5 +1,6 @@
 <script lang="ts">
     import {showVolumeSlider, silenceSkip, silenceSkipThreshold, theme, useRecommendations, continuePlaylist} from '$lib/utils/store';
+    import {KEYBINDS} from '$lib/utils/keybinds';
     import {themes} from '$lib/utils/themes';
 </script>
 
@@ -65,6 +66,24 @@
             <input type="checkbox" bind:checked={$showVolumeSlider}>
             <span class="slider"></span>
         </label>
+    </div>
+
+    <div class="setting-item kb-setting">
+        <div class="info">
+            <h3>Keyboard Shortcuts</h3>
+            <p>These shortcuts work anywhere in the app, except when typing in a text field.</p>
+        </div>
+        <div class="kb-grid">
+            {#each KEYBINDS as kb}
+                <span class="kb-desc">{kb.description}</span>
+                <span class="kb-keys">
+                    {#each kb.keys as key, i}
+                        <kbd class="key-cap">{key}</kbd>
+                        {#if i < kb.keys.length - 1}<span class="key-plus">+</span>{/if}
+                    {/each}
+                </span>
+            {/each}
+        </div>
     </div>
 
     <div class="setting-item">
@@ -270,8 +289,59 @@
         background-color: #fff;
     }
 
+    .setting-item.kb-setting {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 20px;
+    }
+
+    .kb-grid {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px 24px;
+        align-items: center;
+        width: 100%;
+    }
+
+    .kb-desc {
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+
+    .kb-keys {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        justify-content: flex-end;
+    }
+
+    .key-cap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        border-bottom-width: 3px;
+        border-radius: 5px;
+        padding: 3px 8px;
+        font-size: 12px;
+        font-family: inherit;
+        font-weight: 600;
+        color: var(--text-primary);
+        min-width: 28px;
+        line-height: 1.4;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+        white-space: nowrap;
+    }
+
+    .key-plus {
+        font-size: 11px;
+        color: var(--text-secondary);
+        user-select: none;
+    }
+
     @media (max-width: 768px) {
-        .setting-item:not(.theme-setting) {
+        .setting-item:not(.theme-setting):not(.kb-setting) {
             flex-direction: column;
             align-items: flex-start;
         }

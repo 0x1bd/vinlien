@@ -4,13 +4,15 @@
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
-    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, theme} from '$lib/utils/store';
+    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, theme, isMuted, repeatMode, showQueuePanel, currentTrack} from '$lib/utils/store';
     import {applyTheme} from '$lib/utils/themes';
+    import {get} from 'svelte/store';
 
     $: if (browser) applyTheme($theme);
     import {addToast, toasts} from '$lib/utils/toast';
     import {apiRequest} from '$lib/utils/api';
-    import {audioManager} from '$lib/utils/AudioManager';
+    import {audioManager, audioProgress} from '$lib/utils/AudioManager';
+    import {KEYBINDS} from '$lib/utils/keybinds';
     import Player from '$lib/components/Player.svelte';
     import AddToPlaylistModal from '$lib/components/AddToPlaylistModal.svelte';
     import SearchBar from '$lib/components/SearchBar.svelte';
@@ -98,11 +100,56 @@
         }
     }
 
+    function handleKeydown(e: KeyboardEvent) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+        if (!$user) return;
+
+        const kb = KEYBINDS.find(k => k.code === e.code && !!k.shift === e.shiftKey);
+        if (!kb) return;
+
+        e.preventDefault();
+
+        switch (kb.description) {
+            case 'Play / Pause':
+                $isPlaying = !$isPlaying;
+                break;
+            case 'Next Track':
+                audioManager.playNext(true);
+                break;
+            case 'Previous Track':
+                audioManager.prev();
+                break;
+            case 'Seek Forward 10s':
+            case 'Seek Backward 10s': {
+                const track = get(currentTrack);
+                if (!track?.durationMs) break;
+                const pct = get(audioProgress);
+                const currentMs = (pct / 100) * track.durationMs;
+                const delta = kb.description === 'Seek Forward 10s' ? 10000 : -10000;
+                const newMs = Math.max(0, Math.min(currentMs + delta, track.durationMs));
+                audioManager.seek((newMs / track.durationMs) * 100);
+                break;
+            }
+            case 'Mute / Unmute':
+                $isMuted = !$isMuted;
+                break;
+            case 'Cycle Repeat':
+                $repeatMode = ($repeatMode + 1) % 3;
+                break;
+            case 'Toggle Queue':
+                $showQueuePanel = !$showQueuePanel;
+                break;
+        }
+    }
+
     onMount(() => {
         audioManager;
         const handleResize = () => $isSidebarOpen = window.innerWidth > 600;
         handleResize();
         window.addEventListener('resize', handleResize);
+        window.addEventListener('keydown', handleKeydown);
+        return () => window.removeEventListener('keydown', handleKeydown);
     });
 </script>
 
