@@ -1,7 +1,7 @@
 <script lang="ts">
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
-    import {queue, currentTrackIndex, isPlaying, userPlaylists} from '$lib/utils/store';
+    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import TrackRow from '$lib/components/TrackRow.svelte';
@@ -48,9 +48,43 @@
 
     function playTrackAtIndex(index: number) {
         if (!playlist) return;
-        $queue = [...playlist.tracks];
-        $currentTrackIndex = index;
+        if ($continuePlaylist) {
+            $queue = [...playlist.tracks];
+            $currentTrackIndex = index;
+        } else {
+            $queue = [playlist.tracks[index]];
+            $currentTrackIndex = 0;
+        }
         $isPlaying = true;
+    }
+
+    function shufflePlaylist() {
+        if (!playlist?.tracks.length) return;
+        const shuffled = [...playlist.tracks];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        $queue = shuffled;
+        $currentTrackIndex = 0;
+        $isPlaying = true;
+    }
+
+    async function deleteTrackAtIndex(index: number) {
+        if (!playlist) return;
+        const newTracks = playlist.tracks.filter((_, i) => i !== index);
+        playlist = {...playlist, tracks: newTracks};
+        try {
+            await apiRequest(`/api/playlists/${playlist.id}/tracks`, {
+                method: 'PUT',
+                body: newTracks
+            });
+            apiRequest('/api/playlists').then((all: Playlist[]) => {
+                if (all) userPlaylists.set(all);
+            }).catch(() => {});
+        } catch (e) {
+            addToast('Failed to remove track', 'error');
+        }
     }
 
     function openEditModal() {
@@ -186,7 +220,17 @@
                     Play
                 </button>
 
-                {#if !isSystemPlaylist}
+                <button class="icon-btn" on:click={shufflePlaylist} title="Shuffle play">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="16 3 21 3 21 8"></polyline>
+                        <line x1="4" y1="20" x2="21" y2="3"></line>
+                        <polyline points="21 16 21 21 16 21"></polyline>
+                        <line x1="15" y1="15" x2="21" y2="21"></line>
+                        <line x1="4" y1="4" x2="9" y2="9"></line>
+                    </svg>
+                </button>
+
+{#if !isSystemPlaylist}
                     <button class="icon-btn" on:click={openEditModal} title="Edit Details">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              stroke-width="2">
@@ -213,7 +257,7 @@
                 class:dragging={draggedIdx === i}
                 class:dragover={dragoverIdx === i && draggedIdx !== i}
             >
-                <TrackRow {track} onPlay={() => playTrackAtIndex(i)}/>
+                <TrackRow {track} onPlay={() => playTrackAtIndex(i)} onDelete={isSystemPlaylist ? null : () => deleteTrackAtIndex(i)}/>
             </div>
         {/each}
         {#if playlist.tracks.length === 0}
@@ -387,7 +431,7 @@
         background: var(--bg-hover);
     }
 
-    .track-list {
+.track-list {
         display: flex;
         flex-direction: column;
         gap: 2px;

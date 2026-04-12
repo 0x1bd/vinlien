@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {showVolumeSlider, silenceSkip, silenceSkipThreshold, theme, useRecommendations} from '$lib/utils/store';
+    import {showVolumeSlider, silenceSkip, silenceSkipThreshold, theme, useRecommendations, continuePlaylist} from '$lib/utils/store';
     import {themes} from '$lib/utils/themes';
 </script>
 
@@ -40,6 +40,17 @@
         </div>
         <label class="switch">
             <input type="checkbox" bind:checked={$useRecommendations}>
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <div class="setting-item">
+        <div class="info">
+            <h3>Continue Playlist</h3>
+            <p>When clicking a song in a playlist, queue the rest of the playlist. Disable to play only that track and use autoplay recommendations instead.</p>
+        </div>
+        <label class="switch">
+            <input type="checkbox" bind:checked={$continuePlaylist}>
             <span class="slider"></span>
         </label>
     </div>
