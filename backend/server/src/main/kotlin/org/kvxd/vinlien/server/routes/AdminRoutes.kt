@@ -18,8 +18,13 @@ import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.shared.models.AdminStats
 import org.kvxd.vinlien.shared.models.AdminStatsResponse
 import org.kvxd.vinlien.shared.models.ChangePasswordReq
+import org.kvxd.vinlien.shared.models.DayStat
+import org.kvxd.vinlien.shared.models.TrackStat
 import org.kvxd.vinlien.shared.models.User
 import org.kvxd.vinlien.shared.models.UserStat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import org.mindrot.jbcrypt.BCrypt
 
 fun Route.adminRoutes() {
@@ -65,8 +70,43 @@ fun Route.adminRoutes() {
                 UserStat(userNames[uid] ?: "Unknown", entries.size)
             }.sortedByDescending { it.playCount }.take(5)
 
+            val topTracks = allHistoryRows
+                .groupBy { it[History.trackId] }
+                .map { (_, entries) ->
+                    val row = entries.first()
+                    TrackStat(row[Tracks.title], row[Tracks.artist], entries.size)
+                }
+                .sortedByDescending { it.playCount }
+                .take(5)
+
+            val topArtists = allHistoryRows
+                .groupBy { it[Tracks.artist] }
+                .map { (artist, entries) -> UserStat(artist, entries.size) }
+                .sortedByDescending { it.playCount }
+                .take(5)
+
+            val zone = ZoneId.systemDefault()
+            val dayFmt = DateTimeFormatter.ofPattern("MM/dd").withZone(zone)
+            val nowMs = System.currentTimeMillis()
+            val dayMs = 24 * 60 * 60 * 1000L
+            val playsLast7Days = (6 downTo 0).map { daysAgo ->
+                val dayStart = nowMs - (daysAgo + 1) * dayMs
+                val dayEnd = nowMs - daysAgo * dayMs
+                val count = allHistoryRows.count { it[History.timestamp] in dayStart until dayEnd }
+                DayStat(dayFmt.format(Instant.ofEpochMilli(dayEnd - 1)), count)
+            }
+
+            val peakHour = allHistoryRows
+                .groupBy { Instant.ofEpochMilli(it[History.timestamp]).atZone(zone).hour }
+                .maxByOrNull { it.value.size }?.key ?: 0
+
+            val avgPlaysPerUser = if (userNames.isNotEmpty()) totalPlays.toDouble() / userNames.size else 0.0
+
             AdminStatsResponse(
-                stats = AdminStats(userNames.size, totalPlays, uniqueTracks, totalPlaytimeMs, topUsers),
+                stats = AdminStats(
+                    userNames.size, totalPlays, uniqueTracks, totalPlaytimeMs,
+                    topUsers, topTracks, topArtists, playsLast7Days, peakHour, avgPlaysPerUser
+                ),
                 pending = pendingUsers
             )
         }

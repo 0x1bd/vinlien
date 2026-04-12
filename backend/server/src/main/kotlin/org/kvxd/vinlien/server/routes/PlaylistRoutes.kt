@@ -28,7 +28,6 @@ fun Route.playlistRoutes() {
             val userId = call.principal<JWTPrincipal>()?.payload?.getClaim("id")?.asString() ?: return@get call.respond(
                 HttpStatusCode.Unauthorized
             )
-
             val response = dbQuery {
                 val userPlaylists = Playlists.selectAll().where { Playlists.userId eq userId }.associate {
                     it[Playlists.id] to Playlist(

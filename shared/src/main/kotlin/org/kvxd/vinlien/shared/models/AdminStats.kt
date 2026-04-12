@@ -8,5 +8,10 @@ data class AdminStats(
     val totalPlays: Int,
     val uniqueTracks: Int,
     val totalPlaytimeMs: Long,
-    val topUsers: List<UserStat>
+    val topUsers: List<UserStat>,
+    val topTracks: List<TrackStat>,
+    val topArtists: List<UserStat>,
+    val playsLast7Days: List<DayStat>,
+    val peakHour: Int,
+    val avgPlaysPerUser: Double
 )

@@ -113,6 +113,9 @@ fun Route.authRoutes(secret: String) {
             val username = decoded.getClaim("username").asString()
             val id = decoded.getClaim("id").asString()
 
+            val userExists = dbQuery { Users.selectAll().where { Users.id eq id }.count() > 0 }
+            if (!userExists) return@post call.respond(HttpStatusCode.Unauthorized, "User no longer exists")
+
             val newToken = JWT.create().withClaim("username", username).withClaim("id", id)
                 .withExpiresAt(Date(System.currentTimeMillis() + 3600000)).sign(Algorithm.HMAC256(secret))
             val newRefreshToken = JWT.create().withClaim("username", username).withClaim("id", id)

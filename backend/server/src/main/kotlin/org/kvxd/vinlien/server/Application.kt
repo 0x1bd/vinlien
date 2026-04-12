@@ -16,6 +16,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.selectAll
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.backends.Capability
 import org.kvxd.vinlien.backends.deezer.DeezerMetadataProvider
@@ -64,6 +65,12 @@ fun Application.module() {
                     ?: call.request.parseAuthorizationHeader()
             }
             validate { credential ->
+                val userId = credential.payload.getClaim("id")?.asString()
+                    ?.takeIf { it.isNotEmpty() } ?: return@validate null
+                val userExists = DatabaseFactory.dbQuery {
+                    Users.selectAll().where { Users.id eq userId }.count() > 0
+                }
+                if (!userExists) return@validate null
                 credential.payload.getClaim("username").asString()
                     .takeIf { it.isNotEmpty() }
                     ?.let { JWTPrincipal(credential.payload) }

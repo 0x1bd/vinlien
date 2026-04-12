@@ -53,12 +53,28 @@ export interface UserStat {
     playCount: number;
 }
 
+export interface TrackStat {
+    title: string;
+    artist: string;
+    playCount: number;
+}
+
+export interface DayStat {
+    day: string;
+    count: number;
+}
+
 export interface AdminStats {
     totalUsers: number;
     totalPlays: number;
     uniqueTracks: number;
     totalPlaytimeMs: number;
     topUsers: UserStat[];
+    topTracks: TrackStat[];
+    topArtists: UserStat[];
+    playsLast7Days: DayStat[];
+    peakHour: number;
+    avgPlaysPerUser: number;
 }
 
 export interface AdminStatsResponse {

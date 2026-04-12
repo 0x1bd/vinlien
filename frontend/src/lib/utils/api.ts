@@ -53,6 +53,10 @@ export async function apiRequest(endpoint: string, options: ApiRequestOptions = 
 
         if (refreshOk) {
             res = await fetch(endpoint, requestOptions);
+            if (res.status === 401) {
+                user.set(null);
+                throw new Error("Session expired.");
+            }
         } else {
             user.set(null);
             throw new Error("Session expired.");
