@@ -159,7 +159,7 @@
 
     .save-btn.active {
         color: var(--accent-color);
-        background: rgba(37, 99, 235, 0.1);
+        background: color-mix(in srgb, var(--accent-color) 15%, transparent);
     }
 
     .save-row {
@@ -202,7 +202,7 @@
     }
 
     .save-confirm-btn:not(:disabled):hover {
-        background: #1d4ed8;
+        filter: brightness(0.88);
     }
 
     .queue-list {
@@ -212,7 +212,7 @@
     }
 
     .queue-item.playing {
-        background: rgba(37, 99, 235, 0.1);
+        background: color-mix(in srgb, var(--accent-color) 12%, transparent);
         border-radius: 6px;
     }
 

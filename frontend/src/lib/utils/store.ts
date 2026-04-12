@@ -1,6 +1,7 @@
 import {writable, derived} from 'svelte/store';
 import {browser} from '$app/environment';
 import type {Track, User, Playlist} from '$lib/utils/types';
+import type {ThemeId} from '$lib/utils/themes';
 
 function createPersistedStore<T>(key: string, initialValue: T) {
     let storedValue = initialValue;
@@ -53,6 +54,7 @@ export const trackToAdd = writable<Track | null>(null);
 
 export const silenceSkip = createPersistedStore<boolean>('vinlien_silenceSkip', false);
 export const silenceSkipThreshold = createPersistedStore<number>('vinlien_silenceSkipThreshold', 2);
+export const theme = createPersistedStore<ThemeId>('vinlien_theme', 'dark');
 
 export const currentTrack = derived(
     [queue, currentTrackIndex],

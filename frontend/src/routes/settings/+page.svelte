@@ -1,5 +1,6 @@
 <script lang="ts">
-    import {showVolumeSlider, silenceSkip, silenceSkipThreshold} from '$lib/utils/store';
+    import {showVolumeSlider, silenceSkip, silenceSkipThreshold, theme} from '$lib/utils/store';
+    import {themes} from '$lib/utils/themes';
 </script>
 
 <div class="header">
@@ -7,6 +8,31 @@
 </div>
 
 <div class="settings-container">
+    <div class="setting-item theme-setting">
+        <div class="info">
+            <h3>Theme</h3>
+            <p>Choose the appearance of the app.</p>
+        </div>
+        <div class="theme-options">
+            {#each Object.values(themes) as t}
+                <button
+                    class="theme-card"
+                    class:selected={$theme === t.id}
+                    on:click={() => ($theme = t.id)}
+                >
+                    <div class="theme-swatch">
+                        <div class="swatch-sidebar" style="background:{t.vars['--bg-sidebar']}"></div>
+                        <div class="swatch-main" style="background:{t.vars['--bg-base']}">
+                            <div class="swatch-surface" style="background:{t.vars['--bg-surface']}"></div>
+                            <div class="swatch-accent" style="background:{t.vars['--accent-color']}"></div>
+                        </div>
+                    </div>
+                    <span class="theme-label" style="color:{t.vars['--text-primary']};background:{t.vars['--bg-elevated']}">{t.name}</span>
+                </button>
+            {/each}
+        </div>
+    </div>
+
     <div class="setting-item">
         <div class="info">
             <h3>Player Volume Slider</h3>
@@ -51,6 +77,77 @@
         flex-direction: column;
         gap: 16px;
         max-width: 700px;
+    }
+
+    .setting-item.theme-setting {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .theme-options {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .theme-card {
+        background: none;
+        border: 2px solid transparent;
+        padding: 0;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: border-color 0.2s, transform 0.15s;
+        width: 90px;
+    }
+
+    .theme-card:hover {
+        transform: scale(1.04);
+        filter: none;
+    }
+
+    .theme-card.selected {
+        border-color: var(--accent-color);
+    }
+
+    .theme-swatch {
+        display: flex;
+        height: 56px;
+        width: 100%;
+    }
+
+    .swatch-sidebar {
+        width: 28%;
+        flex-shrink: 0;
+    }
+
+    .swatch-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px 6px 0;
+    }
+
+    .swatch-surface {
+        height: 10px;
+        border-radius: 3px;
+    }
+
+    .swatch-accent {
+        height: 6px;
+        border-radius: 3px;
+        width: 60%;
+    }
+
+    .theme-label {
+        display: block;
+        width: 100%;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 0;
     }
 
     .setting-item {
@@ -152,7 +249,7 @@
     }
 
     @media (max-width: 768px) {
-        .setting-item {
+        .setting-item:not(.theme-setting) {
             flex-direction: column;
             align-items: flex-start;
         }

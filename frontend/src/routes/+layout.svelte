@@ -1,9 +1,13 @@
 <script lang="ts">
     import '../app.css';
     import {onMount} from 'svelte';
+    import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
-    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
+    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, theme} from '$lib/utils/store';
+    import {applyTheme} from '$lib/utils/themes';
+
+    $: if (browser) applyTheme($theme);
     import {addToast, toasts} from '$lib/utils/toast';
     import {apiRequest} from '$lib/utils/api';
     import {audioManager} from '$lib/utils/AudioManager';
@@ -113,12 +117,7 @@
     <div class="layout" class:sidebar-open={$isSidebarOpen}>
         <aside class="sidebar" class:collapsed={!$isSidebarOpen}>
             <div class="brand">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" class="logo-icon">
-                    <path d="M9 18V5l12-2v13"></path>
-                    <circle cx="6" cy="18" r="3"></circle>
-                    <circle cx="18" cy="16" r="3"></circle>
-                </svg>
+                <img src="/icon.svg" alt="Vinlien" width="28" height="28" class="logo-icon"/>
                 <h1>Vinlien</h1>
             </div>
 
@@ -292,7 +291,7 @@
 
     .sidebar {
         width: 260px;
-        background: #000;
+        background: var(--bg-sidebar);
         display: flex;
         flex-direction: column;
         padding: 24px 0 0 0;
@@ -430,7 +429,7 @@
         width: 100%;
         padding: 8px;
         background: var(--bg-hover);
-        color: #fff;
+        color: var(--text-primary);
         border: 1px solid var(--border-subtle);
         border-radius: 4px;
     }
@@ -439,7 +438,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        background: #000;
+        background: var(--bg-sidebar);
         padding: 16px 24px;
     }
 
@@ -570,7 +569,7 @@
             left: 0;
             right: 0;
             height: 65px;
-            background: rgba(18, 18, 18, 0.95);
+            background: var(--bg-surface);
             backdrop-filter: blur(10px);
             border-top: 1px solid var(--border-subtle);
             z-index: 110;
