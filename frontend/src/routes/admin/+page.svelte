@@ -157,20 +157,18 @@
                         <div class="avatar" class:admin-avatar={u.role === 'ADMIN'}>
                             {u.username[0].toUpperCase()}
                         </div>
-                        <div>
-                            <div class="u-name">{u.username} <span
-                                    style="font-size: 11px; color: var(--text-secondary); margin-left: 8px;">({u.role}
-                                )</span></div>
+                        <div class="user-meta">
+                            <div class="u-name">{u.username}<span class="role-tag">({u.role})</span></div>
                             <div class="u-id">ID: {u.id}</div>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button style="padding: 6px 12px; font-size: 12px; background: var(--bg-hover); color: var(--text-primary);"
+                    <div class="action-buttons">
+                        <button class="action-btn secondary"
                                 on:click={() => resetPassword(u.id, u.username)}>
                             Reset Pwd
                         </button>
                         {#if u.role !== 'ADMIN'}
-                            <button class="danger" style="padding: 6px 12px; font-size: 12px;"
+                            <button class="danger action-btn"
                                     on:click={() => deleteUser(u.id, u.username)}>
                                 Delete
                             </button>
@@ -313,14 +311,20 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        min-width: 0;
     }
 
     .avatar {
         width: 36px;
         height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+        flex-shrink: 0;
+        aspect-ratio: 1;
         background: var(--bg-hover);
         color: var(--text-primary);
         border-radius: 50%;
+        overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -337,9 +341,45 @@
         font-size: 14px;
     }
 
+    .user-meta {
+        min-width: 0;
+    }
+
+    .role-tag {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-left: 8px;
+    }
+
     .u-id {
         font-size: 12px;
         color: var(--text-secondary);
+        overflow-wrap: anywhere;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+        line-height: 1;
+        transform: none;
+    }
+
+    .action-btn:hover {
+        transform: none;
+    }
+
+    .action-btn:active {
+        transform: none;
+    }
+
+    .action-btn.secondary {
+        background: var(--bg-hover);
+        color: var(--text-primary);
     }
 
     @media (max-width: 768px) {
