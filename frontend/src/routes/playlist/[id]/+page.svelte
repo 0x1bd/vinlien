@@ -2,7 +2,8 @@
     import {tick} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
-    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist, autoDownloadPlaylists} from '$lib/utils/store';
+    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist, autoDownloadPlaylists, serverAvailable} from '$lib/utils/store';
+    import {get} from 'svelte/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import {downloadPlaylistAudio, getPlaylistOfflineStats, removePlaylistAudio} from '$lib/utils/offlineAudio';
@@ -53,6 +54,7 @@
 
     async function downloadOffline() {
         if (!playlist || isDownloading) return;
+        if (!get(serverAvailable)) { addToast('Cannot download while offline', 'error'); return; }
         const total = [...new Set(playlist.tracks.map(t => t.id))].length;
         isDownloading = true;
         downloadProgress = {downloaded: 0, total, failed: 0};
@@ -134,6 +136,7 @@
 
     async function deleteTrackAtIndex(index: number) {
         if (!playlist) return;
+        if (!get(serverAvailable)) { addToast('Cannot modify playlist while offline', 'error'); return; }
         const newTracks = playlist.tracks.filter((_, i) => i !== index);
         playlist = {...playlist, tracks: newTracks};
         try {
@@ -160,6 +163,7 @@
 
     async function savePlaylistInfo() {
         if (!playlist || !editName.trim()) return;
+        if (!get(serverAvailable)) { addToast('Cannot save while offline', 'error'); return; }
         isSaving = true;
         try {
             await apiRequest(`/api/playlists/${playlist.id}/info`, {
@@ -184,6 +188,7 @@
 
     async function deletePlaylist() {
         if (!playlist) return;
+        if (!get(serverAvailable)) { addToast('Cannot delete while offline', 'error'); return; }
         isDeleting = true;
         try {
             await apiRequest(`/api/playlists/${playlist.id}`, {method: 'DELETE'});
@@ -220,6 +225,7 @@
         e.preventDefault();
         dragoverIdx = null;
         if (draggedIdx === null || draggedIdx === idx || !playlist) return;
+        if (!get(serverAvailable)) { addToast('Cannot reorder while offline', 'error'); draggedIdx = null; return; }
 
         const newTracks = [...playlist.tracks];
         const [movedTrack] = newTracks.splice(draggedIdx, 1);

@@ -1,5 +1,6 @@
 <script lang="ts">
-    import {userPlaylists} from '$lib/utils/store';
+    import {userPlaylists, serverAvailable} from '$lib/utils/store';
+    import {get} from 'svelte/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import {goto} from '$app/navigation';
@@ -14,6 +15,7 @@
 
     async function createPlaylist() {
         if (!newName.trim()) return;
+        if (!get(serverAvailable)) { addToast('Cannot create playlist while offline', 'error'); return; }
         try {
             await apiRequest('/api/playlists', {method: 'POST', body: {name: newName.trim()}});
             const all = await apiRequest('/api/playlists');
@@ -27,6 +29,7 @@
 
     async function confirmDelete() {
         if (!playlistToDelete || isDeleting) return;
+        if (!get(serverAvailable)) { addToast('Cannot delete playlist while offline', 'error'); return; }
         isDeleting = true;
         try {
             await apiRequest(`/api/playlists/${playlistToDelete.id}`, {method: 'DELETE'});
