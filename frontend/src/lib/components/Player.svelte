@@ -9,7 +9,8 @@
         showVolumeSlider,
         trackToAdd,
         showQueuePanel,
-        autoDownloadPlaylists
+        autoDownloadPlaylists,
+        serverAvailable
     } from '$lib/utils/store';
     import {get} from 'svelte/store';
     import {downloadTrack} from '$lib/utils/offlineAudio';
@@ -70,6 +71,7 @@
 
     async function toggleLike() {
         if (!$currentTrack) return;
+        if (!get(serverAvailable)) { addToast('Cannot like songs while offline', 'error'); return; }
         const prevLiked = isLiked;
         isLiked = !isLiked;
         if (isLiked) isDisliked = false;
@@ -91,6 +93,7 @@
 
     async function toggleDislike() {
         if (!$currentTrack) return;
+        if (!get(serverAvailable)) { addToast('Cannot dislike songs while offline', 'error'); return; }
         const prevDisliked = isDisliked;
         isDisliked = !isDisliked;
         if (isDisliked) isLiked = false;
