@@ -11,6 +11,7 @@ import {
     useRecommendations
 } from '$lib/utils/store';
 import {apiRequest} from '$lib/utils/api';
+import {getCachedTrackUrl} from '$lib/utils/offlineAudio';
 import type {Track} from '$lib/utils/types';
 
 export const audioProgress = writable(0);
@@ -48,6 +49,8 @@ class AudioManager {
     private preloadAttemptedForTrack: string | null = null;
     private isFetchingRec = false;
     private lastPositionReportSec = -1;
+    private currentBlobUrl: string | null = null;
+    private loadingForTrackId: string | null = null;
 
     constructor() {
         this.audio.autoplay = true;
@@ -107,7 +110,9 @@ class AudioManager {
                 this.lastPositionReportSec = -1;
 
                 const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
-                if (currentSrcId === track.id && this.audio.readyState > 0) {
+                const isBlobSrc = this.audio.src?.startsWith('blob:');
+                const blobMatchesCurrent = isBlobSrc && this.loadingForTrackId === track.id;
+                if ((currentSrcId === track.id || blobMatchesCurrent) && this.audio.readyState > 0) {
                     if (get(isPlaying)) this.audio.play().catch(() => {});
                     return;
                 }
@@ -117,12 +122,9 @@ class AudioManager {
                 durationDisplay.set("0:00");
 
                 apiRequest('/api/history', {method: 'POST', body: track})
-                    .catch(e => console.error("Failed to record history", e));
+                    .catch(() => {});
 
-                this.audio.src = this.buildStreamUrl(track);
-                this.audio.load();
-
-                if (get(isPlaying)) this.audio.play().catch(() => {});
+                this.loadTrack(track);
 
                 if ('mediaSession' in navigator) {
                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -156,8 +158,13 @@ class AudioManager {
                     this.enrichArtwork(track).catch(() => {});
                 }
             } else {
+                this.loadingForTrackId = null;
                 this.audio.pause();
                 this.audio.removeAttribute('src');
+                if (this.currentBlobUrl) {
+                    URL.revokeObjectURL(this.currentBlobUrl);
+                    this.currentBlobUrl = null;
+                }
 
                 if (window.vinlienElectron) {
                     window.vinlienElectron.updateMedia({title: '', artist: ''});
@@ -175,6 +182,32 @@ class AudioManager {
         });
         if (track.streamUrl) params.set('streamUrl', track.streamUrl);
         return `/api/stream?${params}`;
+    }
+
+    private async loadTrack(track: Track): Promise<void> {
+        this.loadingForTrackId = track.id;
+
+        if (this.currentBlobUrl) {
+            URL.revokeObjectURL(this.currentBlobUrl);
+            this.currentBlobUrl = null;
+        }
+
+        const cachedUrl = await getCachedTrackUrl(track.id);
+
+        if (this.loadingForTrackId !== track.id) {
+            if (cachedUrl) URL.revokeObjectURL(cachedUrl);
+            return;
+        }
+
+        if (cachedUrl) {
+            this.currentBlobUrl = cachedUrl;
+            this.audio.src = cachedUrl;
+        } else {
+            this.audio.src = this.buildStreamUrl(track);
+        }
+
+        this.audio.load();
+        if (get(isPlaying)) this.audio.play().catch(() => {});
     }
 
     private async enrichArtwork(track: Track): Promise<void> {
@@ -313,6 +346,18 @@ class AudioManager {
         } else {
             const idx = get(currentTrackIndex);
             if (idx > 0) currentTrackIndex.set(idx - 1);
+        }
+    }
+
+    invalidateBlobs(trackIds: string[]): void {
+        const current = get(queue)[get(currentTrackIndex)];
+        if (current && trackIds.includes(current.id)) {
+            if (this.currentBlobUrl) {
+                URL.revokeObjectURL(this.currentBlobUrl);
+                this.currentBlobUrl = null;
+            }
+            this.loadingForTrackId = null;
+            this.audio.removeAttribute('src');
         }
     }
 

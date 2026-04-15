@@ -1,9 +1,12 @@
 <script lang="ts">
+    import {tick} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
-    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist} from '$lib/utils/store';
+    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist, autoDownloadPlaylists} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
+    import {downloadPlaylistAudio, getPlaylistOfflineStats, removePlaylistAudio} from '$lib/utils/offlineAudio';
+    import {audioManager} from '$lib/utils/AudioManager';
     import TrackRow from '$lib/components/TrackRow.svelte';
     import type {Playlist} from '$lib/utils/types';
 
@@ -20,10 +23,69 @@
     let isDeleting = false;
     let showDeleteConfirm = false;
 
+    let offlineStats: {cached: number; total: number} | null = null;
+    let isDownloading = false;
+    let downloadProgress: {downloaded: number; total: number; failed: number; currentTrackTitle?: string} | null = null;
+
     $: if (selectedPlaylistId) {
         apiRequest('/api/playlists').then((all: Playlist[]) => {
             playlist = all.find(p => p.id === selectedPlaylistId) || null;
+        }).catch(() => {
+            playlist = $userPlaylists.find(p => p.id === selectedPlaylistId) || null;
         });
+    }
+
+    $: if (playlist) {
+        getPlaylistOfflineStats(playlist).then(s => { offlineStats = s; });
+    }
+
+    $: offlineFullyCached = offlineStats && offlineStats.total > 0 && offlineStats.cached === offlineStats.total;
+    $: isAutoDownload = playlist ? $autoDownloadPlaylists.includes(playlist.id) : false;
+
+    function toggleAutoDownload() {
+        if (!playlist) return;
+        const enabling = !isAutoDownload;
+        autoDownloadPlaylists.update(ids =>
+            ids.includes(playlist!.id) ? ids.filter(id => id !== playlist!.id) : [...ids, playlist!.id]
+        );
+        if (enabling) downloadOffline();
+    }
+
+    async function downloadOffline() {
+        if (!playlist || isDownloading) return;
+        const total = [...new Set(playlist.tracks.map(t => t.id))].length;
+        isDownloading = true;
+        downloadProgress = {downloaded: 0, total, failed: 0};
+        await tick();
+        try {
+            const result = await downloadPlaylistAudio(playlist, (p) => { downloadProgress = p; });
+            if (result.downloaded === 0 && result.failed > 0) {
+                addToast(`All ${result.failed} downloads failed`, 'error');
+            } else if (result.failed > 0) {
+                addToast(`Downloaded ${result.downloaded}/${result.total} tracks (${result.failed} failed)`, 'info');
+            } else {
+                addToast('Downloaded for offline listening', 'success');
+            }
+        } catch (e) {
+            addToast((e as Error).message || 'Download failed', 'error');
+        } finally {
+            isDownloading = false;
+            downloadProgress = null;
+            if (playlist) offlineStats = await getPlaylistOfflineStats(playlist);
+        }
+    }
+
+    async function removeOffline() {
+        if (!playlist) return;
+        try {
+            const trackIds = [...new Set(playlist.tracks.map(t => t.id))];
+            audioManager.invalidateBlobs(trackIds);
+            await removePlaylistAudio(playlist, $userPlaylists);
+            addToast('Removed offline audio', 'info');
+            offlineStats = await getPlaylistOfflineStats(playlist);
+        } catch (e) {
+            addToast('Failed to remove offline audio', 'error');
+        }
     }
 
     $: isSystemPlaylist = playlist?.name === 'Liked Songs' || playlist?.name === 'Disliked Songs';
@@ -210,7 +272,24 @@
             {/if}
             <div class="subtitle">
                 {playlist.tracks.length} songs • {formatTotalTime(totalDurationMs)}
+                {#if offlineStats && offlineStats.cached > 0}
+                    • <span class="offline-label" class:fully={offlineFullyCached}>
+                        {offlineFullyCached ? 'Available offline' : `${offlineStats.cached}/${offlineStats.total} offline`}
+                    </span>
+                {/if}
             </div>
+
+            {#if isDownloading && downloadProgress}
+                <div class="download-progress">
+                    <div class="download-progress-bar">
+                        <div class="download-progress-fill" style="width: {Math.round((downloadProgress.downloaded / downloadProgress.total) * 100)}%"></div>
+                    </div>
+                    <span class="download-progress-label">
+                        {downloadProgress.downloaded}/{downloadProgress.total}
+                        {#if downloadProgress.currentTrackTitle}— {downloadProgress.currentTrackTitle}{/if}
+                    </span>
+                </div>
+            {/if}
 
             <div class="action-row">
                 <button class="play-all-btn" on:click={playPlaylist}>
@@ -230,15 +309,47 @@
                     </svg>
                 </button>
 
-{#if !isSystemPlaylist}
+                {#if !isSystemPlaylist}
                     <button class="icon-btn" on:click={openEditModal} title="Edit Details">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                         </svg>
                     </button>
                 {/if}
+
+                <button class="icon-btn" class:auto-download-on={isAutoDownload} on:click={toggleAutoDownload}
+                        title={isAutoDownload ? 'Auto-download on' : 'Enable auto-download'}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <polyline points="23 20 23 14 17 14"></polyline>
+                        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+                    </svg>
+                </button>
+
+                {#if offlineFullyCached}
+                    <button class="icon-btn offline-cached" on:click={removeOffline} title="Remove offline audio">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                        </svg>
+                    </button>
+                {:else}
+                    <button class="icon-btn" on:click={downloadOffline} disabled={isDownloading}
+                            title={offlineStats ? `Download offline (${offlineStats.cached}/${offlineStats.total} cached)` : 'Download offline'}>
+                        {#if isDownloading}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg>
+                        {:else}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        {/if}
+                    </button>
+                {/if}
+
             </div>
         </div>
     </div>
@@ -272,7 +383,6 @@
     <div class="empty-state">Loading playlist…</div>
 {/if}
 
-<!-- Edit Playlist Modal -->
 {#if showEditModal}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -525,6 +635,10 @@
         border-color: var(--accent-color);
     }
 
+    .auto-download-on {
+        color: var(--accent-color);
+    }
+
     .modal-actions {
         display: flex;
         justify-content: space-between;
@@ -607,6 +721,65 @@
     .cancel-btn:hover {
         color: var(--text-primary);
         background: var(--bg-hover);
+    }
+
+    .offline-label {
+        color: var(--text-secondary);
+    }
+
+    .offline-label.fully {
+        color: #22c55e;
+    }
+
+    .offline-cached {
+        color: #22c55e;
+    }
+
+    .offline-cached:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+
+    .download-progress {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+
+    .download-progress-bar {
+        height: 3px;
+        background: var(--bg-elevated);
+        border-radius: 2px;
+        overflow: hidden;
+        width: 100%;
+        max-width: 320px;
+    }
+
+    .download-progress-fill {
+        height: 100%;
+        background: var(--accent-color);
+        border-radius: 2px;
+        transition: width 0.2s ease;
+    }
+
+    .download-progress-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 320px;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
     }
 
     @media (max-width: 768px) {

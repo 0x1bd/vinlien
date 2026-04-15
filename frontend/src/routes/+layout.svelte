@@ -1,10 +1,12 @@
 <script lang="ts">
     import '../app.css';
     import {onMount} from 'svelte';
+    import {afterNavigate} from '$app/navigation';
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
-    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, theme, isMuted, repeatMode, showQueuePanel, currentTrack} from '$lib/utils/store';
+    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, theme, isMuted, repeatMode, showQueuePanel, currentTrack, serverAvailable, autoDownloadPlaylists} from '$lib/utils/store';
+    import {downloadPlaylistAudio} from '$lib/utils/offlineAudio';
     import {applyTheme} from '$lib/utils/themes';
     import {get} from 'svelte/store';
 
@@ -17,7 +19,6 @@
     import AddToPlaylistModal from '$lib/components/AddToPlaylistModal.svelte';
     import SearchBar from '$lib/components/SearchBar.svelte';
 
-    let hasLoadedPlaylists = false;
     let isCreatingPlaylist = false;
     let newPlaylistName = "";
     let newPlaylistInput: HTMLInputElement;
@@ -30,24 +31,32 @@
         goto('/login');
     }
 
+    const SERVER_ONLY_ROUTES = ['/', '/admin'];
+    $: if ($user && !$serverAvailable && SERVER_ONLY_ROUTES.includes($page.url.pathname)) {
+        goto('/settings');
+    }
+
     async function loadPlaylists() {
         try {
             const res = await apiRequest('/api/playlists');
-            if (res) $userPlaylists = res;
+            if (res) {
+                $userPlaylists = res;
+                for (const pl of res) {
+                    if ($autoDownloadPlaylists.includes(pl.id)) {
+                        downloadPlaylistAudio(pl).catch(() => {});
+                    }
+                }
+            }
         } catch (e) {
         }
     }
 
-    $: if ($user && !hasLoadedPlaylists) {
-        loadPlaylists();
-        hasLoadedPlaylists = true;
-    }
+    afterNavigate(() => { if ($user) loadPlaylists(); });
 
     function logout() {
         apiRequest('/api/auth/logout', {method: 'POST'}).catch(() => {
         });
         $user = null;
-        hasLoadedPlaylists = false;
         $userPlaylists = [];
         $queue = [];
         $currentTrackIndex = -1;
@@ -144,6 +153,7 @@
     }
 
     onMount(() => {
+        if ($user) loadPlaylists();
         audioManager;
         const handleResize = () => $isSidebarOpen = window.innerWidth > 600;
         handleResize();
@@ -170,12 +180,14 @@
             </div>
 
             <nav>
-                <a href="/" class="nav-btn" class:active={$page.url.pathname === '/'}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                    </svg>
-                    Home
-                </a>
+                {#if $serverAvailable}
+                    <a href="/" class="nav-btn" class:active={$page.url.pathname === '/'}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        </svg>
+                        Home
+                    </a>
+                {/if}
                 <a href="/settings" class="nav-btn" class:active={$page.url.pathname === '/settings'}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -183,7 +195,7 @@
                     </svg>
                     Settings
                 </a>
-                {#if $user.role === 'ADMIN'}
+                {#if $serverAvailable && $user.role === 'ADMIN'}
                     <a href="/admin" class="nav-btn" class:active={$page.url.pathname === '/admin'}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              stroke-width="2">
@@ -194,18 +206,26 @@
                 {/if}
             </nav>
 
+            {#if !$serverAvailable}
+                <div class="offline-note">Offline</div>
+            {/if}
+
             <div class="sidebar-playlists">
                 <div class="playlists-header">
                     <a href="/library" class="library-heading" class:active={$page.url.pathname === '/library'}>Your Library</a>
-                    <button class="add-pl-btn" on:click={startCreatePlaylist}>+</button>
+                    {#if $serverAvailable}
+                        <button class="add-pl-btn" on:click={startCreatePlaylist}>+</button>
+                    {/if}
                 </div>
                 <div class="pl-list">
                     {#each $userPlaylists as pl}
                         <a href="/playlist/{pl.id}" class="pl-item"
                            class:active={$page.url.pathname === `/playlist/${pl.id}`}
                            class:drag-over={dragOverId === pl.id}
-                           on:dragover|preventDefault on:dragenter={() => dragOverId = pl.id}
-                           on:dragleave={() => dragOverId = null} on:drop={(e) => handleDrop(e, pl.id)}>
+                           on:dragover|preventDefault
+                           on:dragenter={() => { if ($serverAvailable) dragOverId = pl.id; }}
+                           on:dragleave={() => dragOverId = null}
+                           on:drop={(e) => { if ($serverAvailable) handleDrop(e, pl.id); }}>
 
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 {#if pl.name === 'Liked Songs'}
@@ -256,19 +276,20 @@
 
         <main class="content">
             <div class="main-view-inner">
-                <SearchBar/>
+                {#if $serverAvailable}<SearchBar/>{/if}
                 <slot/>
             </div>
         </main>
 
-        <!-- Mobile Bottom Nav -->
         <nav class="mobile-bottom-nav">
-            <a href="/" class="mobile-nav-btn" class:active={$page.url.pathname === '/'}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                </svg>
-                <span>Home</span>
-            </a>
+            {#if $serverAvailable}
+                <a href="/" class="mobile-nav-btn" class:active={$page.url.pathname === '/'}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>Home</span>
+                </a>
+            {/if}
 
             <a href="/library" class="mobile-nav-btn" class:active={$page.url.pathname.startsWith('/library')}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -299,7 +320,6 @@
         </nav>
     </div>
 
-    <!-- Password Requirement Modal overlay -->
     {#if $user?.requiresPasswordChange}
         <div class="modal-backdrop force-password-modal">
             <div class="modal-content text-center">
@@ -524,6 +544,15 @@
         padding: 40px 40px 130px;
         max-width: 1400px;
         margin: 0 auto;
+    }
+
+    .offline-note {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--danger-color);
+        padding: 12px 24px 12px;
     }
 
     .toast-container {

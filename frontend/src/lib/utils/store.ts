@@ -37,7 +37,7 @@ if (browser) {
     });
 }
 
-export const userPlaylists = writable<Playlist[]>([]);
+export const userPlaylists = createPersistedStore<Playlist[]>('vinlien_playlists', []);
 export const isSidebarOpen = writable(true);
 
 export const queue = writable<Track[]>([]);
@@ -60,3 +60,6 @@ export const currentTrack = derived(
     [queue, currentTrackIndex],
     ([$queue, $currentTrackIndex]) => $queue[$currentTrackIndex] || null
 );
+
+export const serverAvailable = writable(true);
+export const autoDownloadPlaylists = createPersistedStore<string[]>('vinlien_autoDownload', []);

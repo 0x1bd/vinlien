@@ -8,8 +8,11 @@
         isMuted,
         showVolumeSlider,
         trackToAdd,
-        showQueuePanel
+        showQueuePanel,
+        autoDownloadPlaylists
     } from '$lib/utils/store';
+    import {get} from 'svelte/store';
+    import {downloadTrack} from '$lib/utils/offlineAudio';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import {audioManager, audioProgress, currentTimeDisplay, durationDisplay} from '$lib/utils/AudioManager';
@@ -75,6 +78,12 @@
             await apiRequest('/api/playlists/liked/toggle', {method: 'POST', body: $currentTrack});
             const res = await apiRequest('/api/playlists');
             if (res) $userPlaylists = res;
+            if (isLiked) {
+                const likedId = $userPlaylists.find(p => p.name === 'Liked Songs')?.id;
+                if (likedId && get(autoDownloadPlaylists).includes(likedId)) {
+                    downloadTrack($currentTrack).catch(() => {});
+                }
+            }
         } catch (e) {
             isLiked = prevLiked;
         }
@@ -90,8 +99,12 @@
             await apiRequest('/api/playlists/disliked/toggle', {method: 'POST', body: $currentTrack});
             const res = await apiRequest('/api/playlists');
             if (res) $userPlaylists = res;
-            if (isDisliked && $isPlaying) {
-                audioManager.playNext(true);
+            if (isDisliked) {
+                const dislikedId = $userPlaylists.find(p => p.name === 'Disliked Songs')?.id;
+                if (dislikedId && get(autoDownloadPlaylists).includes(dislikedId)) {
+                    downloadTrack($currentTrack).catch(() => {});
+                }
+                if ($isPlaying) audioManager.playNext(true);
             }
         } catch (e) {
             isDisliked = prevDisliked;
@@ -215,7 +228,6 @@
                     <button class="action-btn action-repeat" class:active={$repeatMode > 0}
                             on:click|stopPropagation={() => $repeatMode = ($repeatMode + 1) % 3}>
                         {#if $repeatMode === 2}
-                            <!-- Repeat One Icon -->
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  stroke-width="2">
                                 <polyline points="17 1 21 5 17 9"></polyline>
@@ -227,7 +239,6 @@
                                 </text>
                             </svg>
                         {:else}
-                            <!-- Repeat All / Off Icon -->
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  stroke-width="2">
                                 <polyline points="17 1 21 5 17 9"></polyline>
@@ -252,7 +263,6 @@
                         <input type="range" class="volume-slider action-vol" min="0" max="1" step="0.01"
                                bind:value={$volume} on:click|stopPropagation/>
                     {/if}
-                    <!-- Removed isMobileExpanded = false to keep player open when queue shown over it -->
                     <button class="action-btn action-queue" class:active={$showQueuePanel}
                             on:click|stopPropagation={() => { $showQueuePanel = !$showQueuePanel; }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
