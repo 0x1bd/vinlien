@@ -6,7 +6,7 @@ plugins {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.coroutines.core)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
 
     implementation(libs.ktor.client.core)
