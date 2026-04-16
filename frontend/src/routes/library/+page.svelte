@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {userPlaylists} from '$lib/utils/store';
+    import {userPlaylists, requireOnline} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import {goto} from '$app/navigation';
@@ -14,6 +14,7 @@
 
     async function createPlaylist() {
         if (!newName.trim()) return;
+        if (!requireOnline('Cannot create playlist while offline')) return;
         try {
             await apiRequest('/api/playlists', {method: 'POST', body: {name: newName.trim()}});
             const all = await apiRequest('/api/playlists');
@@ -27,6 +28,7 @@
 
     async function confirmDelete() {
         if (!playlistToDelete || isDeleting) return;
+        if (!requireOnline('Cannot delete playlist while offline')) return;
         isDeleting = true;
         try {
             await apiRequest(`/api/playlists/${playlistToDelete.id}`, {method: 'DELETE'});
@@ -103,7 +105,6 @@
     {/each}
 </div>
 
-<!-- Delete confirm modal -->
 {#if playlistToDelete}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -216,8 +217,8 @@
     }
 
     .delete-btn:hover {
-        color: #ef4444;
-        background: rgba(239, 68, 68, 0.1);
+        color: var(--danger-color);
+        background: color-mix(in srgb, var(--danger-color) 10%, transparent);
     }
 
     @media (hover: none) {
@@ -280,7 +281,7 @@
     }
 
     .danger-btn {
-        background: #ef4444;
+        background: var(--danger-color);
         color: #fff;
         padding: 9px 20px;
         border-radius: 6px;
@@ -289,7 +290,7 @@
     }
 
     .danger-btn:hover:not(:disabled) {
-        background: #dc2626;
+        filter: brightness(0.88);
     }
 
     .danger-btn:disabled,

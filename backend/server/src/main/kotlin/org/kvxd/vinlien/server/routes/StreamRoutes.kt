@@ -44,10 +44,10 @@ fun Route.streamRoutes(engine: AggregationEngine) {
         }
 
         if (urlOrPath.startsWith("http")) {
-            val rangeHeader = call.request.headers[HttpHeaders.Range]
+            val rangeHeader = call.request.headers[HttpHeaders.Range] ?: "bytes=0-"
             val upstream = proxyClient.get(urlOrPath) {
                 header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
-                if (rangeHeader != null) header(HttpHeaders.Range, rangeHeader)
+                header(HttpHeaders.Range, rangeHeader)
             }
             val ct = upstream.contentType()?.toString() ?: "audio/mpeg"
             call.response.headers.append(HttpHeaders.AcceptRanges, "bytes")

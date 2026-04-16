@@ -1,4 +1,4 @@
-import {user} from '$lib/utils/store';
+import {user, serverAvailable} from '$lib/utils/store';
 
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
@@ -36,7 +36,14 @@ export async function apiRequest(endpoint: string, options: ApiRequestOptions = 
         body
     };
 
-    let res = await fetch(endpoint, requestOptions);
+    let res: Response;
+    try {
+        res = await fetch(endpoint, requestOptions);
+        serverAvailable.set(true);
+    } catch (networkError) {
+        serverAvailable.set(false);
+        throw networkError;
+    }
 
     if (res.status === 401 && endpoint !== '/api/auth/login' && endpoint !== '/api/auth/refresh') {
         if (!isRefreshing) {

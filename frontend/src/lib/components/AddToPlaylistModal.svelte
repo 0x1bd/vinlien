@@ -1,7 +1,9 @@
 <script lang="ts">
-    import {userPlaylists, trackToAdd} from '$lib/utils/store';
+    import {userPlaylists, trackToAdd, autoDownloadPlaylists, requireOnline} from '$lib/utils/store';
+    import {get} from 'svelte/store';
     import {addToast} from '$lib/utils/toast';
     import {apiRequest} from '$lib/utils/api';
+    import {downloadTrack} from '$lib/utils/offlineAudio';
 
     let newPlaylistName = '';
     let isCreating = false;
@@ -16,12 +18,14 @@
 
     async function addToPlaylist(playlistId: string) {
         if (!$trackToAdd) return;
+        if (!requireOnline('Cannot modify playlist while offline')) return;
+        const track = $trackToAdd;
         try {
-            await apiRequest(`/api/playlists/${playlistId}/tracks`, {
-                method: 'POST',
-                body: $trackToAdd
-            });
-            addToast(`Added to playlist`, 'success');
+            await apiRequest(`/api/playlists/${playlistId}/tracks`, {method: 'POST', body: track});
+            addToast('Added to playlist', 'success');
+            if (get(autoDownloadPlaylists).includes(playlistId)) {
+                downloadTrack(track).catch(() => {});
+            }
         } catch (e) {
         }
         $trackToAdd = null;
@@ -29,6 +33,7 @@
 
     async function createAndAdd() {
         if (!newPlaylistName.trim() || !$trackToAdd) return;
+        if (!requireOnline('Cannot create playlist while offline')) return;
         isCreating = true;
 
         try {

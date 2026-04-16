@@ -1,4 +1,5 @@
-import {writable, derived} from 'svelte/store';
+import {writable, derived, get} from 'svelte/store';
+import {addToast} from '$lib/utils/toast';
 import {browser} from '$app/environment';
 import type {Track, User, Playlist} from '$lib/utils/types';
 import type {ThemeId} from '$lib/utils/themes';
@@ -37,7 +38,7 @@ if (browser) {
     });
 }
 
-export const userPlaylists = writable<Playlist[]>([]);
+export const userPlaylists = createPersistedStore<Playlist[]>('vinlien_playlists', []);
 export const isSidebarOpen = writable(true);
 
 export const queue = writable<Track[]>([]);
@@ -60,3 +61,14 @@ export const currentTrack = derived(
     [queue, currentTrackIndex],
     ([$queue, $currentTrackIndex]) => $queue[$currentTrackIndex] || null
 );
+
+export const serverAvailable = writable(true);
+export const autoDownloadPlaylists = createPersistedStore<string[]>('vinlien_autoDownload', []);
+
+export function requireOnline(message = 'This action is not available offline'): boolean {
+    if (!get(serverAvailable)) {
+        addToast(message, 'error');
+        return false;
+    }
+    return true;
+}

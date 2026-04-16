@@ -125,7 +125,6 @@
     </div>
 </div>
 
-<!-- 7-day activity chart -->
 <div class="section-card full-width" style="margin-bottom: 24px;">
     <h3>Activity — Last 7 Days</h3>
     {#if stats.playsLast7Days.length === 0}
