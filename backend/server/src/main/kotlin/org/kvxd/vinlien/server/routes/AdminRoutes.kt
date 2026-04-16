@@ -23,6 +23,7 @@ import org.kvxd.vinlien.shared.models.TrackStat
 import org.kvxd.vinlien.shared.models.User
 import org.kvxd.vinlien.shared.models.UserStat
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import org.mindrot.jbcrypt.BCrypt
@@ -85,15 +86,20 @@ fun Route.adminRoutes() {
                 .sortedByDescending { it.playCount }
                 .take(5)
 
-            val zone = ZoneId.systemDefault()
-            val dayFmt = DateTimeFormatter.ofPattern("MM/dd").withZone(zone)
-            val nowMs = System.currentTimeMillis()
-            val dayMs = 24 * 60 * 60 * 1000L
+            val zone = try {
+                val tz = System.getenv("TZ")
+                if (!tz.isNullOrBlank()) ZoneId.of(tz) else ZoneId.of("UTC")
+            } catch (_: Exception) {
+                ZoneId.of("UTC")
+            }
+            val dayFmt = DateTimeFormatter.ofPattern("MM/dd")
+            val today = LocalDate.now(zone)
             val playsLast7Days = (6 downTo 0).map { daysAgo ->
-                val dayStart = nowMs - (daysAgo + 1) * dayMs
-                val dayEnd = nowMs - daysAgo * dayMs
+                val day = today.minusDays(daysAgo.toLong())
+                val dayStart = day.atStartOfDay(zone).toInstant().toEpochMilli()
+                val dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
                 val count = allHistoryRows.count { it[History.timestamp] in dayStart until dayEnd }
-                DayStat(dayFmt.format(Instant.ofEpochMilli(dayEnd - 1)), count)
+                DayStat(day.format(dayFmt), count)
             }
 
             val peakHour = allHistoryRows

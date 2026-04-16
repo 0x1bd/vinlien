@@ -180,7 +180,7 @@
                     <div class="bar-row">
                         <span class="label">{a.username}</span>
                         <div class="bar-track">
-                            <div class="bar-fill purple" style="width: {(a.playCount / maxArtistPlays) * 100}%"></div>
+                            <div class="bar-fill success" style="width: {(a.playCount / maxArtistPlays) * 100}%"></div>
                         </div>
                         <span class="count">{a.playCount}</span>
                     </div>
@@ -377,8 +377,8 @@
         background: var(--accent-color);
     }
 
-    .bar-fill.purple {
-        background: #a855f7;
+    .bar-fill.success {
+        background: var(--success-color);
     }
 
     .full-width {

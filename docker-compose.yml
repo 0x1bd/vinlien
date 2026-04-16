@@ -92,6 +92,7 @@ services:
       - DB_USER=appuser
       - DB_PASSWORD=${DB_PASSWORD:-dbpassword}
       - INVIDIOUS_URL=http://invidious:3000
+      - TZ=Europe/Berlin
 
       # Uncomment these if you want to use env vars instead of config.json
       # - LASTFM_API_KEY=${LASTFM_API_KEY}
