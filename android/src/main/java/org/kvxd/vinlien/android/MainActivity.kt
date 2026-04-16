@@ -5,6 +5,9 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
 import android.os.Bundle
 import android.os.IBinder
 import android.webkit.WebChromeClient
@@ -17,12 +20,15 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ScrollView
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
 
@@ -35,6 +41,8 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
     private var webView: WebView? = null
     private var musicService: MusicService? = null
     private var serviceBound = false
+    private var offlineLoadAttempted = false
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -80,6 +88,13 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
     }
 
     override fun onDestroy() {
+        networkCallback?.let {
+            try {
+                (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager)
+                    .unregisterNetworkCallback(it)
+            } catch (_: Exception) {}
+            networkCallback = null
+        }
         if (serviceBound) {
             musicService?.webListener = null
             unbindService(serviceConnection)
@@ -133,6 +148,7 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
+        startNetworkMonitoring()
         if (serviceBound) setupAndLoadWebView(wv)
     }
 
@@ -158,6 +174,10 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
 
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
+                offlineLoadAttempted = false
+                if (view.settings.cacheMode != WebSettings.LOAD_DEFAULT) {
+                    view.settings.cacheMode = WebSettings.LOAD_DEFAULT
+                }
                 injectBridge(view)
             }
 
@@ -166,7 +186,7 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
                 request: WebResourceRequest
             ): Boolean {
                 if (request.url.scheme == "vinlien") {
-                    if (request.url.host == "settings") showUrlDialog()
+                    if (request.url.host == "settings") showSettingsSheet()
                     return true
                 }
                 return false
@@ -177,12 +197,24 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
                 request: WebResourceRequest,
                 error: WebResourceError
             ) {
-                if (request.isForMainFrame) showErrorPage(view)
+                if (!request.isForMainFrame) return
+                if (!isNetworkAvailable() && !offlineLoadAttempted) {
+                    // No network — try loading from WebView's HTTP cache before giving up.
+                    // If the service worker or browser cache has the page, it will load.
+                    offlineLoadAttempted = true
+                    view.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    val serverUrl = prefs.getString(PREF_SERVER_URL, "") ?: return
+                    view.loadUrl(serverUrl)
+                } else {
+                    offlineLoadAttempted = false
+                    view.settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    showErrorPage(view, offline = !isNetworkAvailable())
+                }
             }
         }
         wv.webChromeClient = WebChromeClient()
 
-        wv.setOnLongClickListener { showUrlDialog(); true }
+        wv.setOnLongClickListener { showSettingsSheet(); true }
 
         val url = prefs.getString(PREF_SERVER_URL, "") ?: return
         wv.loadUrl(url)
@@ -226,8 +258,13 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
         wv.evaluateJavascript(js, null)
     }
 
-    private fun showErrorPage(wv: WebView) {
+    private fun showErrorPage(wv: WebView, offline: Boolean = false) {
         val url = prefs.getString(PREF_SERVER_URL, "") ?: ""
+        val title = if (offline) "You&#39;re offline" else "Cannot connect to server"
+        val body  = if (offline)
+            "No network connection. Connect to your home network to reach the server."
+        else
+            "Make sure Vinlien is running at<br><code>$url</code>"
         val html = """
             <!DOCTYPE html><html><head>
             <meta name='viewport' content='width=device-width,initial-scale=1'>
@@ -240,26 +277,86 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
               h2   { font-size:20px; font-weight:700; margin-bottom:8px; }
               p    { color:#a3a3a3; font-size:14px; line-height:1.5; margin-bottom:32px; }
               code { background:#282828; padding:2px 6px; border-radius:4px; }
-              .btn-primary { background:#2563eb; color:#fff; border:none; padding:12px 32px;
-                       font-size:15px; font-weight:600; border-radius:8px; cursor:pointer; margin-bottom:12px; }
-              .btn-secondary { background:transparent; color:#a3a3a3; border:1px solid #404040;
-                       padding:10px 24px; font-size:14px; border-radius:8px; cursor:pointer; }
+              .btn-primary   { display:block; width:100%; background:#2563eb; color:#fff;
+                               border:none; padding:12px 32px; font-size:15px; font-weight:600;
+                               border-radius:8px; cursor:pointer; margin-bottom:12px; }
+              .btn-secondary { display:block; width:100%; background:transparent; color:#a3a3a3;
+                               border:1px solid #404040; padding:10px 24px; font-size:14px;
+                               border-radius:8px; cursor:pointer; }
             </style></head>
             <body>
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="1.5">
                 <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
               </svg>
-              <h2>Cannot connect to server</h2>
-              <p>Make sure Vinlien is running at<br><code>$url</code></p>
-              <button class='btn-primary' onclick="location.reload()">Retry</button><br>
+              <h2>$title</h2>
+              <p>$body</p>
+              <button class='btn-primary' onclick="location.reload()">Retry</button>
               <button class='btn-secondary' onclick="location.href='vinlien://settings'">Change server address</button>
             </body></html>
         """.trimIndent()
         wv.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
     }
 
-    private fun showUrlDialog() {
-        startActivity(Intent(this, SettingsActivity::class.java))
+    private fun showSettingsSheet() {
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_settings, null)
+
+        val urlInput  = view.findViewById<EditText>(R.id.urlInput)
+        val saveBtn   = view.findViewById<Button>(R.id.saveBtn)
+        val statusTv  = view.findViewById<TextView>(R.id.statusText)
+
+        urlInput.setText(prefs.getString(PREF_SERVER_URL, ""))
+
+        val online = isNetworkAvailable()
+        statusTv.text = if (online) "● Connected" else "● Offline"
+        statusTv.setTextColor(
+            ContextCompat.getColor(this, if (online) R.color.success else R.color.danger)
+        )
+
+        fun save() {
+            val raw = urlInput.text.toString().trim()
+            if (raw.isBlank()) return
+            val url = if (raw.startsWith("http://") || raw.startsWith("https://")) raw
+                      else "http://$raw"
+            prefs.edit { putString(PREF_SERVER_URL, url) }
+            sheet.dismiss()
+            webView?.settings?.cacheMode = WebSettings.LOAD_DEFAULT
+            offlineLoadAttempted = false
+            webView?.loadUrl(url)
+        }
+
+        saveBtn.setOnClickListener { save() }
+        urlInput.setOnEditorActionListener { _, _, _ -> save(); true }
+
+        sheet.setContentView(view)
+        sheet.show()
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        return cm.activeNetwork != null
+    }
+
+    private fun startNetworkMonitoring() {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                runOnUiThread {
+                    val currentUrl = webView?.url ?: return@runOnUiThread
+                    val serverUrl  = prefs.getString(PREF_SERVER_URL, "") ?: return@runOnUiThread
+                    // If the WebView is stuck on an error page, retry now that we're back online.
+                    if (currentUrl.startsWith("data:")) {
+                        webView?.settings?.cacheMode = WebSettings.LOAD_DEFAULT
+                        offlineLoadAttempted = false
+                        webView?.loadUrl(serverUrl)
+                    }
+                }
+            }
+        }
+        networkCallback = callback
+        try {
+            cm.registerNetworkCallback(NetworkRequest.Builder().build(), callback)
+        } catch (_: Exception) {}
     }
 
     override fun onPlay()       = evalJs("window.vinlienControl?.play()")

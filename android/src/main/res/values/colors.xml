@@ -8,5 +8,6 @@
     <color name="text_secondary">#FFA3A3A3</color>
     <color name="accent">#FF2563EB</color>
     <color name="danger">#FFEF4444</color>
+    <color name="success">#FF22C55E</color>
     <color name="border_subtle">#FF282828</color>
 </resources>
