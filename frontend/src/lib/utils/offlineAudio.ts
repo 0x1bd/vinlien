@@ -1,7 +1,20 @@
 import {browser} from '$app/environment';
+import {writable} from 'svelte/store';
 import type {Playlist, Track} from '$lib/utils/types';
 
 const OFFLINE_AUDIO_CACHE = 'vinlien-offline-audio-v1';
+const CONCURRENT_DOWNLOADS = 3;
+
+export interface DownloadProgress {
+    downloaded: number;
+    total: number;
+    failed: number;
+    currentTrackTitle?: string;
+}
+
+export const activeDownloads = writable<Record<string, DownloadProgress>>({});
+
+const inProgressDownloads = new Set<string>();
 
 function buildStreamUrl(track: Track): string {
     const params = new URLSearchParams({
@@ -87,7 +100,7 @@ export async function downloadTrack(track: Track): Promise<void> {
         credentials: 'include',
         headers: {'Range': 'bytes=0-', 'Accept-Encoding': 'identity'}
     });
-    if (!response.ok && response.status !== 206) return;
+    if (!response.ok && response.status !== 206) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     await cache.put(cacheKey, new Response(blob, {
         status: 200,
@@ -95,66 +108,44 @@ export async function downloadTrack(track: Track): Promise<void> {
     }));
 }
 
-const CONCURRENT_DOWNLOADS = 3;
-
 export async function downloadPlaylistAudio(
-    playlist: Playlist,
-    onProgress?: (progress: {downloaded: number; total: number; failed: number; currentTrackTitle?: string}) => void
+    playlist: Playlist
 ): Promise<{downloaded: number; total: number; failed: number}> {
-    const uniqueTracks = [...new Map(playlist.tracks.map(track => [track.id, track])).values()];
+    if (inProgressDownloads.has(playlist.id)) return {downloaded: 0, total: 0, failed: 0};
 
-    if (!uniqueTracks.length) {
-        onProgress?.({downloaded: 0, total: 0, failed: 0});
-        return {downloaded: 0, total: 0, failed: 0};
-    }
-
-    const cache = await getCache();
-    if (!cache) {
-        throw new Error('Offline caching is not available in this browser.');
-    }
-
-    let downloaded = 0;
-    let failed = 0;
+    const uniqueTracks = [...new Map(playlist.tracks.map(t => [t.id, t])).values()];
     const total = uniqueTracks.length;
 
+    if (!total) return {downloaded: 0, total: 0, failed: 0};
+
+    const cache = await getCache();
+    if (!cache) throw new Error('Offline caching is not available in this browser.');
+
+    let downloaded = 0, failed = 0;
+    inProgressDownloads.add(playlist.id);
+    activeDownloads.update(m => ({...m, [playlist.id]: {downloaded, total, failed}}));
+
     const downloadOne = async (track: Track) => {
-        const cacheKey = cacheRequestForTrack(track.id);
-        const cached = await cache.match(cacheKey);
-
-        if (cached) {
-            downloaded += 1;
-            onProgress?.({downloaded, total, failed, currentTrackTitle: track.title});
-            return;
-        }
-
         try {
-            const response = await fetch(buildStreamUrl(track), {
-                method: 'GET',
-                credentials: 'include',
-                headers: {'Range': 'bytes=0-', 'Accept-Encoding': 'identity'}
-            });
-
-            if (!response.ok && response.status !== 206) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const blob = await response.blob();
-            const normalized = new Response(blob, {
-                status: 200,
-                headers: {'Content-Type': response.headers.get('Content-Type') || 'audio/mpeg'}
-            });
-            await cache.put(cacheKey, normalized);
+            await downloadTrack(track);
             downloaded += 1;
-        } catch (error) {
-            console.error('[offline] Failed to cache track', track.id, error);
+        } catch (e) {
+            console.error('[offline] Failed to cache track', track.id, e);
             failed += 1;
         }
-
-        onProgress?.({downloaded, total, failed, currentTrackTitle: track.title});
+        activeDownloads.update(m => ({
+            ...m,
+            [playlist.id]: {downloaded, total, failed, currentTrackTitle: track.title}
+        }));
     };
 
-    for (let i = 0; i < uniqueTracks.length; i += CONCURRENT_DOWNLOADS) {
-        await Promise.all(uniqueTracks.slice(i, i + CONCURRENT_DOWNLOADS).map(downloadOne));
+    try {
+        for (let i = 0; i < uniqueTracks.length; i += CONCURRENT_DOWNLOADS) {
+            await Promise.all(uniqueTracks.slice(i, i + CONCURRENT_DOWNLOADS).map(downloadOne));
+        }
+    } finally {
+        inProgressDownloads.delete(playlist.id);
+        activeDownloads.update(({[playlist.id]: _, ...rest}) => rest);
     }
 
     return {downloaded, total, failed};
@@ -170,4 +161,3 @@ export async function removePlaylistAudio(playlist: Playlist, allPlaylists: Play
     const toDelete = [...new Set(playlist.tracks.map(t => t.id))].filter(id => !sharedIds.has(id));
     await Promise.all(toDelete.map(id => cache.delete(cacheRequestForTrack(id))));
 }
-

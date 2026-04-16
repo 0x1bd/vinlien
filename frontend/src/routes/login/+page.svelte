@@ -103,7 +103,7 @@
     .msg {
         color: var(--danger-color);
         font-size: 14px;
-        background: rgba(239, 68, 68, 0.1);
+        background: color-mix(in srgb, var(--danger-color) 10%, transparent);
         padding: 12px;
         border-radius: 6px;
     }

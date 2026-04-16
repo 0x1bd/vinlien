@@ -114,7 +114,7 @@
     }
 
     .play-all-btn:hover {
-        background: #1d4ed8;
+        filter: brightness(0.88);
     }
 
     .track-list {

@@ -140,7 +140,7 @@
     }
 
     .delete-btn:hover {
-        color: var(--danger-color, #ef4444);
+        color: var(--danger-color);
         transform: scale(1.1);
     }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {apiRequest} from '$lib/utils/api';
-    import {queue, currentTrackIndex, isPlaying, serverAvailable} from '$lib/utils/store';
+    import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
     import type {Track, HomeFeed} from '$lib/utils/types';
     import TrackCard from '$lib/components/TrackCard.svelte';
 

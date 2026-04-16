@@ -11,7 +11,8 @@
     import {get} from 'svelte/store';
 
     $: if (browser) applyTheme($theme);
-    import {addToast, toasts} from '$lib/utils/toast';
+    import {addToast} from '$lib/utils/toast';
+    import Toast from '$lib/components/Toast.svelte';
     import {apiRequest} from '$lib/utils/api';
     import {audioManager, audioProgress} from '$lib/utils/AudioManager';
     import {KEYBINDS} from '$lib/utils/keybinds';
@@ -163,11 +164,7 @@
     });
 </script>
 
-<div class="toast-container">
-    {#each $toasts as t (t.id)}
-        <div class="toast {t.type}">{t.message}</div>
-    {/each}
-</div>
+<Toast/>
 
 {#if !$user && $page.url.pathname === '/login'}
     <slot/>
@@ -486,7 +483,7 @@
 
     .pl-item.active {
         color: var(--accent-color);
-        background: rgba(37, 99, 235, 0.1);
+        background: color-mix(in srgb, var(--accent-color) 10%, transparent);
     }
 
     .pl-item.drag-over {
@@ -553,49 +550,6 @@
         letter-spacing: 0.06em;
         color: var(--danger-color);
         padding: 12px 24px 12px;
-    }
-
-    .toast-container {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .toast {
-        padding: 12px 20px;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-        animation: slideIn 0.3s ease;
-    }
-
-    .toast.success {
-        background: #10b981;
-    }
-
-    .toast.error {
-        background: #ef4444;
-    }
-
-    .toast.info {
-        background: #3b82f6;
-    }
-
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
     }
 
     .mobile-bottom-nav {

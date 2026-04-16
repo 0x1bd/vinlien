@@ -317,7 +317,7 @@
     }
 
     .skeleton {
-        background: var(--bg-hover, #2a2a2a);
+        background: var(--bg-hover);
         overflow: hidden;
         position: relative;
     }

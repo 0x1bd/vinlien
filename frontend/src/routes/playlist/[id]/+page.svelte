@@ -1,12 +1,10 @@
 <script lang="ts">
-    import {tick} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
-    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist, autoDownloadPlaylists, serverAvailable} from '$lib/utils/store';
-    import {get} from 'svelte/store';
+    import {queue, currentTrackIndex, isPlaying, userPlaylists, continuePlaylist, autoDownloadPlaylists, requireOnline} from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
-    import {downloadPlaylistAudio, getPlaylistOfflineStats, removePlaylistAudio} from '$lib/utils/offlineAudio';
+    import {downloadPlaylistAudio, getPlaylistOfflineStats, removePlaylistAudio, activeDownloads} from '$lib/utils/offlineAudio';
     import {audioManager} from '$lib/utils/AudioManager';
     import TrackRow from '$lib/components/TrackRow.svelte';
     import type {Playlist} from '$lib/utils/types';
@@ -25,8 +23,8 @@
     let showDeleteConfirm = false;
 
     let offlineStats: {cached: number; total: number} | null = null;
-    let isDownloading = false;
-    let downloadProgress: {downloaded: number; total: number; failed: number; currentTrackTitle?: string} | null = null;
+    $: downloadProgress = selectedPlaylistId ? ($activeDownloads[selectedPlaylistId] ?? null) : null;
+    $: isDownloading = !!downloadProgress;
 
     $: if (selectedPlaylistId) {
         apiRequest('/api/playlists').then((all: Playlist[]) => {
@@ -54,13 +52,9 @@
 
     async function downloadOffline() {
         if (!playlist || isDownloading) return;
-        if (!get(serverAvailable)) { addToast('Cannot download while offline', 'error'); return; }
-        const total = [...new Set(playlist.tracks.map(t => t.id))].length;
-        isDownloading = true;
-        downloadProgress = {downloaded: 0, total, failed: 0};
-        await tick();
+        if (!requireOnline('Cannot download while offline')) return;
         try {
-            const result = await downloadPlaylistAudio(playlist, (p) => { downloadProgress = p; });
+            const result = await downloadPlaylistAudio(playlist);
             if (result.downloaded === 0 && result.failed > 0) {
                 addToast(`All ${result.failed} downloads failed`, 'error');
             } else if (result.failed > 0) {
@@ -71,8 +65,6 @@
         } catch (e) {
             addToast((e as Error).message || 'Download failed', 'error');
         } finally {
-            isDownloading = false;
-            downloadProgress = null;
             if (playlist) offlineStats = await getPlaylistOfflineStats(playlist);
         }
     }
@@ -136,7 +128,7 @@
 
     async function deleteTrackAtIndex(index: number) {
         if (!playlist) return;
-        if (!get(serverAvailable)) { addToast('Cannot modify playlist while offline', 'error'); return; }
+        if (!requireOnline('Cannot modify playlist while offline')) return;
         const newTracks = playlist.tracks.filter((_, i) => i !== index);
         playlist = {...playlist, tracks: newTracks};
         try {
@@ -163,7 +155,7 @@
 
     async function savePlaylistInfo() {
         if (!playlist || !editName.trim()) return;
-        if (!get(serverAvailable)) { addToast('Cannot save while offline', 'error'); return; }
+        if (!requireOnline('Cannot save while offline')) return;
         isSaving = true;
         try {
             await apiRequest(`/api/playlists/${playlist.id}/info`, {
@@ -188,7 +180,7 @@
 
     async function deletePlaylist() {
         if (!playlist) return;
-        if (!get(serverAvailable)) { addToast('Cannot delete while offline', 'error'); return; }
+        if (!requireOnline('Cannot delete while offline')) return;
         isDeleting = true;
         try {
             await apiRequest(`/api/playlists/${playlist.id}`, {method: 'DELETE'});
@@ -225,7 +217,7 @@
         e.preventDefault();
         dragoverIdx = null;
         if (draggedIdx === null || draggedIdx === idx || !playlist) return;
-        if (!get(serverAvailable)) { addToast('Cannot reorder while offline', 'error'); draggedIdx = null; return; }
+        if (!requireOnline('Cannot reorder while offline')) { draggedIdx = null; return; }
 
         const newTracks = [...playlist.tracks];
         const [movedTrack] = newTracks.splice(draggedIdx, 1);
@@ -529,7 +521,7 @@
     }
 
     .play-all-btn:hover {
-        background: #1d4ed8;
+        filter: brightness(0.88);
     }
 
     .icon-btn {
@@ -564,7 +556,7 @@
     }
 
     .draggable-row.dragover {
-        background: rgba(37, 99, 235, 0.15);
+        background: color-mix(in srgb, var(--accent-color) 15%, transparent);
         outline: 2px solid var(--accent-color);
         outline-offset: -2px;
     }
@@ -664,7 +656,7 @@
     }
 
     .save-btn:hover:not(:disabled) {
-        background: #1d4ed8;
+        filter: brightness(0.88);
     }
 
     .save-btn:disabled {
@@ -684,8 +676,8 @@
     }
 
     .delete-icon-btn:hover {
-        color: var(--danger-color, #ef4444);
-        background: rgba(239, 68, 68, 0.08);
+        color: var(--danger-color);
+        background: color-mix(in srgb, var(--danger-color) 8%, transparent);
     }
 
     .delete-confirm {
@@ -702,7 +694,7 @@
     }
 
     .danger-btn {
-        background: var(--danger-color, #ef4444);
+        background: var(--danger-color);
         color: #fff;
         padding: 8px 16px;
         border-radius: 6px;
@@ -734,16 +726,16 @@
     }
 
     .offline-label.fully {
-        color: #22c55e;
+        color: var(--success-color);
     }
 
     .offline-cached {
-        color: #22c55e;
+        color: var(--success-color);
     }
 
     .offline-cached:hover {
-        color: #ef4444;
-        background: rgba(239, 68, 68, 0.08);
+        color: var(--danger-color);
+        background: color-mix(in srgb, var(--danger-color) 8%, transparent);
     }
 
 
