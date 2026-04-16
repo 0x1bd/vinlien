@@ -11,7 +11,7 @@ media = "1.7.1"
 slf4j = "2.0.17"
 exposed = "0.48.0"
 postgresql = "42.7.2"
-hikaricp = "5.1.0"
+hikaricp = "7.0.2"
 jbcrypt = "0.4"
 
 [libraries]
