@@ -109,6 +109,7 @@ fun Application.module() {
             searchRoutes(engine)
             streamRoutes(engine)
             feedRoutes(engine)
+            recRoutes(engine)
             adminRoutes()
             playlistRoutes()
         }

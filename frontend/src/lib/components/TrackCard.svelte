@@ -5,6 +5,7 @@
 
     export let track: Track;
     export let onPlay: () => void;
+    export let subtitle: string | undefined = undefined;
 
     let imgError = false;
     $: if (track) imgError = false;
@@ -31,6 +32,9 @@
                 {#if i < track.artists.length - 1}{' & '}{/if}
             {/each}
         </div>
+        {#if subtitle}
+            <div class="subtitle">{subtitle}</div>
+        {/if}
     </div>
     <button class="play-overlay">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -131,6 +135,16 @@
     .artist-link:hover {
         color: var(--text-primary);
         text-decoration: underline;
+    }
+
+    .subtitle {
+        font-size: 11px;
+        color: var(--text-secondary);
+        opacity: 0.7;
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     @media (max-width: 600px) {

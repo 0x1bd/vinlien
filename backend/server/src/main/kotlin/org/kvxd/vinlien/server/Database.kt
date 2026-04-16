@@ -55,6 +55,16 @@ object History : Table("vl_history") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object SkipEvents : Table("vl_skip_events") {
+    val id = integer("id").autoIncrement()
+    val userId = varchar("user_id", 36).references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val trackId = varchar("track_id", 100)
+    val artist = varchar("artist", 255)
+    val playedMs = long("played_ms")
+    val timestamp = long("timestamp")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object DatabaseFactory {
     fun init() {
         val config = HikariConfig().apply {
@@ -70,7 +80,7 @@ object DatabaseFactory {
         Database.connect(dataSource)
 
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(Users, Tracks, Playlists, PlaylistTracks, History)
+            SchemaUtils.createMissingTablesAndColumns(Users, Tracks, Playlists, PlaylistTracks, History, SkipEvents)
 
             if (Users.selectAll().where { Users.username eq "admin" }.empty()) {
                 Users.insert {

@@ -34,6 +34,13 @@ dependencies {
 
     implementation(libs.jbcrypt)
     implementation(libs.ktor.client.cio)
+
+    testImplementation(kotlin("test"))
+    testImplementation(libs.coroutines.test)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 val buildFrontend by tasks.registering(Exec::class) {

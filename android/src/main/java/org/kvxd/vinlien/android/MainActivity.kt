@@ -199,8 +199,6 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
             ) {
                 if (!request.isForMainFrame) return
                 if (!isNetworkAvailable() && !offlineLoadAttempted) {
-                    // No network — try loading from WebView's HTTP cache before giving up.
-                    // If the service worker or browser cache has the page, it will load.
                     offlineLoadAttempted = true
                     view.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
                     val serverUrl = prefs.getString(PREF_SERVER_URL, "") ?: return
@@ -220,10 +218,6 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
         wv.loadUrl(url)
     }
 
-    /**
-     * Installs `window.vinlienElectron` as an adapter that forwards calls to the
-     * native `VinlienAndroid` interface.
-     */
     private fun injectBridge(wv: WebView) {
         val js = """
             (function() {
@@ -344,7 +338,6 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
                 runOnUiThread {
                     val currentUrl = webView?.url ?: return@runOnUiThread
                     val serverUrl  = prefs.getString(PREF_SERVER_URL, "") ?: return@runOnUiThread
-                    // If the WebView is stuck on an error page, retry now that we're back online.
                     if (currentUrl.startsWith("data:")) {
                         webView?.settings?.cacheMode = WebSettings.LOAD_DEFAULT
                         offlineLoadAttempted = false

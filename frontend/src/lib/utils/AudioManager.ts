@@ -51,6 +51,8 @@ class AudioManager {
     private lastPositionReportSec = -1;
     private currentBlobUrl: string | null = null;
     private loadingForTrackId: string | null = null;
+    /** Wall-clock ms when the current track started loading — used to compute playedMs for skip events. */
+    private trackStartTimeMs = 0;
 
     constructor() {
         this.audio.autoplay = true;
@@ -106,6 +108,7 @@ class AudioManager {
 
         currentTrack.subscribe(track => {
             if (track) {
+                this.trackStartTimeMs = Date.now();
                 this.preloadAttemptedForTrack = null;
                 this.lastPositionReportSec = -1;
 
@@ -273,9 +276,10 @@ class AudioManager {
         if (fetchRecs && get(useRecommendations)) {
             this.isFetchingRec = true;
             try {
-                const recs = await apiRequest('/api/recommendations', {method: 'POST', body: {queue: q}});
-                if (recs?.length > 0) {
-                    nextTrack = recs[0];
+                const sessionArtists = q.slice(0, idx + 1).map(t => t.artist.toLowerCase());
+                const rec = await apiRequest('/api/rec', {method: 'POST', body: {queue: q, sessionArtists}});
+                if (rec?.track) {
+                    nextTrack = rec.track;
                     queue.update(q => [...q, nextTrack!]);
                 }
             } catch (e) {
@@ -298,6 +302,18 @@ class AudioManager {
         const q = get(queue);
         const rm = get(repeatMode);
         const idx = get(currentTrackIndex);
+
+        // Record skip event before advancing — backend penalizes if playedMs < 30s
+        if (force && this.trackStartTimeMs > 0) {
+            const track = q[idx];
+            if (track) {
+                const playedMs = Date.now() - this.trackStartTimeMs;
+                apiRequest('/api/rec/skip', {
+                    method: 'POST',
+                    body: {trackId: track.id, artist: track.artist, playedMs}
+                }).catch(() => {});
+            }
+        }
 
         if (rm === REPEAT_ONE && !force) {
             this.audio.currentTime = 0;
@@ -323,9 +339,10 @@ class AudioManager {
 
         this.isFetchingRec = true;
         try {
-            const recs = await apiRequest('/api/recommendations', {method: 'POST', body: {queue: q}});
-            if (recs?.length > 0) {
-                queue.update(q => [...q, recs[0]]);
+            const sessionArtists = q.map(t => t.artist.toLowerCase());
+            const rec = await apiRequest('/api/rec', {method: 'POST', body: {queue: q, sessionArtists}});
+            if (rec?.track) {
+                queue.update(q => [...q, rec.track]);
                 currentTrackIndex.set(idx + 1);
             } else {
                 isPlaying.set(false);

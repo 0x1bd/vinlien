@@ -22,7 +22,11 @@ data class ServerConfig(
     val dbUser: String = "invidious",
     val dbPass: String = "invidious",
     val invidiousUrl: String = "http://localhost:3000",
-    val allowedOrigins: List<String> = emptyList()
+    val allowedOrigins: List<String> = emptyList(),
+    val recDecayDays: Int = 7,
+    val recNoveltyBudget: Float = 0.30f,
+    val recMaxConsecutiveSameArtist: Int = 3,
+    val radioReseedInterval: Int = 5
 )
 
 object Config {

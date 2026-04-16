@@ -1,21 +1,14 @@
 package org.kvxd.vinlien.server.routes
 
 import io.ktor.http.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
-import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.sse.*
 import io.ktor.sse.*
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.sql.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.*
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.shared.models.SearchResponse
-import org.kvxd.vinlien.shared.models.Track
 
 private val sseJson = Json { encodeDefaults = true }
 
@@ -31,9 +24,6 @@ private object TrackDeduplicator {
         return t.trim().replace(Regex("\\s+"), " ")
     }
 }
-
-@Serializable
-data class RecReq(val queue: List<Track>)
 
 fun Route.searchRoutes(engine: AggregationEngine) {
     get("/api/search") {
@@ -62,55 +52,6 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         val response = SearchResponse(tracks, albums)
         searchCache.put(cacheKey, response)
         call.respond(response)
-    }
-
-    post("/api/recommendations") {
-        val req = call.receive<RecReq>()
-        val queue = req.queue
-        val currentTrack = queue.lastOrNull() ?: return@post call.respond(emptyList<Track>())
-
-        val userId = call.principal<JWTPrincipal>()?.payload?.getClaim("id")?.asString()
-
-        var recentHistoryTitles = emptyList<String>()
-        var dislikedTitles = emptyList<String>()
-
-        if (userId != null) {
-            dbQuery {
-                recentHistoryTitles = (History innerJoin Tracks)
-                    .selectAll()
-                    .where { History.userId eq userId }
-                    .orderBy(History.timestamp to SortOrder.DESC)
-                    .limit(30)
-                    .map { it[Tracks.title] }
-
-                val dislikedPlaylistId = Playlists.selectAll()
-                    .where { (Playlists.userId eq userId) and (Playlists.name eq "Disliked Songs") }
-                    .singleOrNull()?.get(Playlists.id)
-
-                if (dislikedPlaylistId != null) {
-                    dislikedTitles = (PlaylistTracks innerJoin Tracks)
-                        .selectAll()
-                        .where { PlaylistTracks.playlistId eq dislikedPlaylistId }
-                        .map { it[Tracks.title] }
-                }
-            }
-        }
-
-        val seenTitleFingerprints = (queue.map { it.title } + recentHistoryTitles + dislikedTitles)
-            .map { TrackDeduplicator.fingerprint(it) }
-
-        fun isAlreadySeen(candidateTitle: String): Boolean {
-            val fingerprint = TrackDeduplicator.fingerprint(candidateTitle)
-            if (fingerprint.isBlank()) return false
-            return seenTitleFingerprints.any { it == fingerprint }
-        }
-
-        val recs = engine.getRecommendations(currentTrack)
-        val freshRec = recs.firstOrNull { r ->
-            queue.none { it.id == r.id } && !isAlreadySeen(r.title)
-        }
-
-        call.respond(if (freshRec != null) listOf(freshRec) else emptyList())
     }
 
     get("/api/artist/{name}") {

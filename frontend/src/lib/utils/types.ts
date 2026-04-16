@@ -88,3 +88,13 @@ export interface ArtistInfo {
     tags: string[];
     imageUrl?: string | null;
 }
+
+export interface RecResult {
+    track: Track;
+    reason: string;
+}
+
+export interface RadioResponse {
+    tracks: RecResult[];
+    seedTrack: Track;
+}
