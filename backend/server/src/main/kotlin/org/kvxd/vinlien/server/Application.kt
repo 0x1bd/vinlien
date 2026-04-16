@@ -108,6 +108,7 @@ fun Application.module() {
         authenticate("auth-jwt") {
             searchRoutes(engine)
             streamRoutes(engine)
+            artworkRoutes()
             feedRoutes(engine)
             recRoutes(engine)
             adminRoutes()

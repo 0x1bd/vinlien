@@ -10,7 +10,7 @@ import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
 import org.kvxd.vinlien.backends.musicbrainz.MusicBrainzMetadataProvider
 import org.kvxd.vinlien.backends.soundcloud.SoundCloudBackend
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.media.Track
 import java.util.UUID
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -77,7 +77,7 @@ class AggregationEngineTest {
     fun `test native SoundCloud stream resolution`() = runTest {
         val tracks = engine.searchTracks("Lofi Hip Hop")
         val scTrack = tracks.firstOrNull { it.id.startsWith("sc:") }
-            ?: return@runTest  // Skip if SoundCloud not available
+            ?: return@runTest
 
         val streamUrl = engine.resolveStream(scTrack)
         assertTrue(streamUrl.startsWith("http"), "Stream URL should be a valid HTTP link")
@@ -87,7 +87,7 @@ class AggregationEngineTest {
     fun `test stream resolution fallback for non-native tracks`() = runTest {
         val tracks = engine.searchTracks("Rick Astley Never Gonna Give You Up")
         val itunesTrack = tracks.firstOrNull { it.id.startsWith("itunes:") }
-            ?: return@runTest  // Skip if iTunes not available
+            ?: return@runTest
 
         val streamUrl = engine.resolveStream(itunesTrack)
         assertTrue(streamUrl.startsWith("http"), "Fallback stream URL should be a valid HTTP link")

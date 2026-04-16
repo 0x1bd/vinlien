@@ -26,12 +26,12 @@
     $: downloadProgress = selectedPlaylistId ? ($activeDownloads[selectedPlaylistId] ?? null) : null;
     $: isDownloading = !!downloadProgress;
 
+    $: playlist = $userPlaylists.find(p => p.id === selectedPlaylistId) ?? null;
+
     $: if (selectedPlaylistId) {
         apiRequest('/api/playlists').then((all: Playlist[]) => {
-            playlist = all.find(p => p.id === selectedPlaylistId) || null;
-        }).catch(() => {
-            playlist = $userPlaylists.find(p => p.id === selectedPlaylistId) || null;
-        });
+            if (all) userPlaylists.set(all);
+        }).catch(() => {});
     }
 
     $: if (playlist) {
@@ -74,7 +74,7 @@
         try {
             const trackIds = [...new Set(playlist.tracks.map(t => t.id))];
             audioManager.invalidateBlobs(trackIds);
-            await removePlaylistAudio(playlist, $userPlaylists);
+            await removePlaylistAudio(playlist);
             addToast('Removed offline audio', 'info');
             offlineStats = await getPlaylistOfflineStats(playlist);
         } catch (e) {

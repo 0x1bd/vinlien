@@ -1,8 +1,10 @@
 <script lang="ts">
-    import {placeholderGradient} from '$lib/utils/artwork';
+    import {placeholderGradient, proxyArtwork} from '$lib/utils/artwork';
 
     export let src: string | null | undefined = undefined;
     export let seed: string = '';
+
+    $: proxiedSrc = proxyArtwork(src);
 
     const LOAD_TIMEOUT_MS = 5000;
 
@@ -22,7 +24,7 @@
         clearLoadTimer();
         loading = false;
         if (success) {
-            loadedSrc = src ?? null;
+            loadedSrc = proxiedSrc ?? null;
         } else {
             error = true;
             loadedSrc = null;
@@ -30,7 +32,7 @@
     }
 
     $: {
-        const next = src ?? null;
+        const next = proxiedSrc ?? null;
         if (next !== loadedSrc) {
             error = false;
             clearLoadTimer();
@@ -45,11 +47,11 @@
 </script>
 
 <div class="art-root">
-    {#if src && !error}
+    {#if proxiedSrc && !error}
         {#if loading}
             <div class="art-spinner"></div>
         {/if}
-        <img {src} alt=""
+        <img src={proxiedSrc} alt=""
              style:visibility={loading ? 'hidden' : 'visible'}
              on:load={() => onImageSettled(true)}
              on:error={() => onImageSettled(false)}>

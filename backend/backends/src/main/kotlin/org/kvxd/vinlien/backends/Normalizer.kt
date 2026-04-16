@@ -1,7 +1,7 @@
 package org.kvxd.vinlien.backends
 
-import org.kvxd.vinlien.shared.models.Album
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.media.Album
+import org.kvxd.vinlien.shared.models.media.Track
 
 private val PRIMARY_ARTIST_SPLIT = Regex(
     """[\s]*[&,][\s]*|[\s]+(feat|ft|featuring)\.?\s+""",

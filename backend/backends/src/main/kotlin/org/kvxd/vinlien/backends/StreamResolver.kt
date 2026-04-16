@@ -1,7 +1,7 @@
 package org.kvxd.vinlien.backends
 
 import kotlinx.coroutines.*
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.media.Track
 
 internal val YT_ID_REGEX = Regex("^[a-zA-Z0-9_-]{11}$")
 

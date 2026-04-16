@@ -9,7 +9,7 @@ import org.kvxd.vinlien.backends.Normalizer
 import org.kvxd.vinlien.backends.YT_ID_REGEX
 import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 

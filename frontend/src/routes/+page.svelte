@@ -29,10 +29,28 @@
 
         if (feed.recentlyPlayed.length > 0) {
             try {
+                const seenIds = new Set<string>();
+                const pool: Track[] = [];
+                for (const t of [...feed.listenAgain, ...feed.recentlyPlayed]) {
+                    if (!seenIds.has(t.id)) { seenIds.add(t.id); pool.push(t); }
+                }
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+                const seeds: Track[] = [];
+                const seenArtists = new Set<string>();
+                for (const t of pool) {
+                    const a = t.artist.toLowerCase().trim();
+                    if (!seenArtists.has(a)) { seenArtists.add(a); seeds.push(t); }
+                    if (seeds.length >= 4) break;
+                }
+                const [seedTrack, ...additionalSeeds] = seeds;
                 const radioRes: RadioResponse = await apiRequest('/api/radio', {
                     method: 'POST',
                     body: {
-                        seedTrack: feed.recentlyPlayed[0],
+                        seedTrack,
+                        additionalSeeds,
                         queue: [],
                         tracksPlayedInSession: 0,
                         sessionArtists: [],

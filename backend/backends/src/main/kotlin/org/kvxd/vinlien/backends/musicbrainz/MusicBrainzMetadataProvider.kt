@@ -9,8 +9,8 @@ import org.kvxd.vinlien.backends.MusicProvider
 import org.kvxd.vinlien.backends.Normalizer
 import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
-import org.kvxd.vinlien.shared.models.Album
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.media.Album
+import org.kvxd.vinlien.shared.models.media.Track
 import java.net.URLEncoder
 
 @Serializable

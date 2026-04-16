@@ -1,7 +1,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import type {Track} from '$lib/utils/types';
-    import {placeholderGradient} from '$lib/utils/artwork';
+    import {placeholderGradient, proxyArtwork} from '$lib/utils/artwork';
 
     export let track: Track;
     export let onPlay: () => void;
@@ -16,7 +16,7 @@
 <div class="track-card" on:click={onPlay}>
     <div class="img-wrapper">
         {#if track.artworkUrl && !imgError}
-            <img src={track.artworkUrl} alt="art" loading="lazy" on:error={() => imgError = true}>
+            <img src={proxyArtwork(track.artworkUrl)} alt="art" loading="lazy" on:error={() => imgError = true}>
         {:else}
             <div class="artwork-placeholder" style="background: {placeholderGradient(track.artist + track.title)}">
                 {track.title[0]?.toUpperCase() ?? '?'}

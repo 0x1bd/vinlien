@@ -15,8 +15,9 @@ import org.jetbrains.exposed.sql.update
 import org.kvxd.vinlien.server.Config
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.server.Users
-import org.kvxd.vinlien.shared.models.ChangePasswordReq
-import org.kvxd.vinlien.shared.models.User
+import org.kvxd.vinlien.server.getUsername
+import org.kvxd.vinlien.shared.models.auth.ChangePasswordReq
+import org.kvxd.vinlien.shared.models.auth.User
 import org.mindrot.jbcrypt.BCrypt
 import java.util.Date
 import java.util.UUID
@@ -43,30 +44,7 @@ fun Route.authRoutes(secret: String) {
             val refreshToken = JWT.create().withClaim("username", req.username).withClaim("id", id)
                 .withExpiresAt(Date(System.currentTimeMillis() + 604800000)).sign(Algorithm.HMAC256(secret))
 
-            call.response.cookies.append(
-                Cookie(
-                    name = "access_token",
-                    value = token,
-                    httpOnly = true,
-                    secure = secureCookie,
-                    path = "/",
-                    maxAge = 3600,
-                    extensions = cookieExtensions
-                )
-            )
-            call.response.cookies.append(
-                Cookie(
-                    name = "refresh_token",
-                    value = refreshToken,
-                    httpOnly = true,
-                    secure = secureCookie,
-                    path = "/",
-                    maxAge = 604800,
-                    extensions = cookieExtensions
-                )
-            )
-
-            // default admin requires a password change
+            call.response.appendAuthCookies(token, refreshToken, secureCookie, cookieExtensions)
             val isDefaultAdminWithDefaultPassword = (req.username == "admin" && req.pass == "admin")
             call.respond(User(id, req.username, role, null, isDefaultAdminWithDefaultPassword))
         } else {
@@ -92,10 +70,8 @@ fun Route.authRoutes(secret: String) {
 
     authenticate("auth-jwt") {
         post("/api/auth/change-password") {
-            val principal = call.principal<JWTPrincipal>() ?: return@post call.respond(HttpStatusCode.Unauthorized)
-            val username = principal.payload.getClaim("username").asString()
+            val username = call.getUsername() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val req = call.receive<ChangePasswordReq>()
-
             dbQuery {
                 Users.update({ Users.username eq username }) {
                     it[passwordHash] = BCrypt.hashpw(req.newPassword, BCrypt.gensalt())
@@ -106,8 +82,8 @@ fun Route.authRoutes(secret: String) {
     }
 
     post("/api/auth/refresh") {
-        val refreshToken =
-            call.request.cookies["refresh_token"] ?: return@post call.respond(HttpStatusCode.Unauthorized)
+        val refreshToken = call.request.cookies["refresh_token"]
+            ?: return@post call.respond(HttpStatusCode.Unauthorized)
         try {
             val decoded = JWT.require(Algorithm.HMAC256(secret)).build().verify(refreshToken)
             val username = decoded.getClaim("username").asString()
@@ -121,29 +97,7 @@ fun Route.authRoutes(secret: String) {
             val newRefreshToken = JWT.create().withClaim("username", username).withClaim("id", id)
                 .withExpiresAt(Date(System.currentTimeMillis() + 604800000)).sign(Algorithm.HMAC256(secret))
 
-            call.response.cookies.append(
-                Cookie(
-                    name = "access_token",
-                    value = newToken,
-                    httpOnly = true,
-                    secure = secureCookie,
-                    path = "/",
-                    maxAge = 3600,
-                    extensions = cookieExtensions
-                )
-            )
-            call.response.cookies.append(
-                Cookie(
-                    name = "refresh_token",
-                    value = newRefreshToken,
-                    httpOnly = true,
-                    secure = secureCookie,
-                    path = "/",
-                    maxAge = 604800,
-                    extensions = cookieExtensions
-                )
-            )
-
+            call.response.appendAuthCookies(newToken, newRefreshToken, secureCookie, cookieExtensions)
             call.respond(HttpStatusCode.OK)
         } catch (e: Exception) {
             call.respond(HttpStatusCode.Unauthorized, "Invalid refresh token")
@@ -151,28 +105,22 @@ fun Route.authRoutes(secret: String) {
     }
 
     post("/api/auth/logout") {
-        call.response.cookies.append(
-            Cookie(
-                name = "access_token",
-                value = "",
-                httpOnly = true,
-                secure = secureCookie,
-                path = "/",
-                maxAge = 0,
-                extensions = cookieExtensions
-            )
-        )
-        call.response.cookies.append(
-            Cookie(
-                name = "refresh_token",
-                value = "",
-                httpOnly = true,
-                secure = secureCookie,
-                path = "/",
-                maxAge = 0,
-                extensions = cookieExtensions
-            )
-        )
+        call.response.clearAuthCookies(secureCookie, cookieExtensions)
         call.respond(HttpStatusCode.OK)
     }
+}
+
+private fun ApplicationResponse.appendAuthCookies(
+    accessToken: String,
+    refreshToken: String,
+    secure: Boolean,
+    extensions: Map<String, String>
+) {
+    cookies.append(Cookie("access_token", accessToken, httpOnly = true, secure = secure, path = "/", maxAge = 3600, extensions = extensions))
+    cookies.append(Cookie("refresh_token", refreshToken, httpOnly = true, secure = secure, path = "/", maxAge = 604800, extensions = extensions))
+}
+
+private fun ApplicationResponse.clearAuthCookies(secure: Boolean, extensions: Map<String, String>) {
+    cookies.append(Cookie("access_token", "", httpOnly = true, secure = secure, path = "/", maxAge = 0, extensions = extensions))
+    cookies.append(Cookie("refresh_token", "", httpOnly = true, secure = secure, path = "/", maxAge = 0, extensions = extensions))
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
     import {userPlaylists, requireOnline} from '$lib/utils/store';
+    import {proxyArtwork} from '$lib/utils/artwork';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import {goto} from '$app/navigation';
@@ -68,7 +69,7 @@
         <div class="pl-card" on:click={() => goto(`/playlist/${pl.id}`)}>
             <div class="pl-art">
                 {#if pl.imageUrl || (pl.tracks.length > 0 && pl.tracks[0].artworkUrl)}
-                    <img src={pl.imageUrl || pl.tracks[0].artworkUrl} alt="Cover">
+                    <img src={proxyArtwork(pl.imageUrl || pl.tracks[0].artworkUrl)} alt="Cover">
                 {:else if pl.name === 'Liked Songs'}
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>

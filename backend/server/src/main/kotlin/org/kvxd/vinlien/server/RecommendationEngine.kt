@@ -1,7 +1,7 @@
 package org.kvxd.vinlien.server
 
-import org.kvxd.vinlien.shared.models.RecResult
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.feed.RecResult
+import org.kvxd.vinlien.shared.models.media.Track
 
 class RecommendationEngine {
 
@@ -73,11 +73,15 @@ class RecommendationEngine {
         return familiarityBonus - skipPenalty - recencyPenalty
     }
 
-    fun buildReason(track: Track, vector: ListeningVector, seedTrack: Track): String {
-        val weight = vector.artistWeights[track.artist.normalizedArtist()] ?: 0.0
+    fun buildReason(track: Track, vector: ListeningVector, seeds: List<Track>): String {
+        val artist = track.artist.normalizedArtist()
+        val weight = vector.artistWeights[artist] ?: 0.0
+        val bestSeed = seeds.maxByOrNull { vector.artistWeights[it.artist.normalizedArtist()] ?: 0.0 }
         return when {
             weight >= 0.7 -> "Because you like ${track.artist}"
-            weight >= 0.3 -> "Because you played \"${seedTrack.title}\""
+            weight >= 0.4 -> "You listen to ${track.artist}"
+            bestSeed != null && (vector.artistWeights[bestSeed.artist.normalizedArtist()] ?: 0.0) >= 0.2
+                -> "Similar to ${bestSeed.artist}"
             else -> "Discover: ${track.artist}"
         }
     }
@@ -85,7 +89,7 @@ class RecommendationEngine {
     fun pickWithDiversity(
         candidates: List<Track>,
         vector: ListeningVector,
-        seedTrack: Track,
+        seeds: List<Track>,
         recentPlayedIds: List<String>,
         sessionArtists: List<String>,
         decayDays: Int = 7,
@@ -126,13 +130,13 @@ class RecommendationEngine {
             else -> valid.best()
         } ?: return null
 
-        return pick to buildReason(pick, vector, seedTrack)
+        return pick to buildReason(pick, vector, seeds)
     }
 
     fun buildRadioQueue(
         candidates: List<Track>,
         vector: ListeningVector,
-        seedTrack: Track,
+        seeds: List<Track>,
         recentPlayedIds: List<String>,
         sessionArtists: List<String>,
         queueSize: Int = 10,
@@ -146,7 +150,7 @@ class RecommendationEngine {
 
         while (result.size < queueSize && remaining.isNotEmpty()) {
             val pick = pickWithDiversity(
-                remaining, vector, seedTrack, recentPlayedIds, currentSession,
+                remaining, vector, seeds, recentPlayedIds, currentSession,
                 decayDays, noveltyBudget, maxConsecutiveSameArtist
             ) ?: break
             result.add(RecResult(pick.first, pick.second))

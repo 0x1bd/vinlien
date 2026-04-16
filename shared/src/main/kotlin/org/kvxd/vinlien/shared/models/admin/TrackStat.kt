@@ -1,4 +1,4 @@
-package org.kvxd.vinlien.shared.models
+package org.kvxd.vinlien.shared.models.admin
 
 import kotlinx.serialization.Serializable
 

@@ -1,6 +1,6 @@
 package org.kvxd.vinlien.server
 
-import org.kvxd.vinlien.shared.models.Track
+import org.kvxd.vinlien.shared.models.media.Track
 import kotlin.test.*
 
 class RecommendationEngineTest {
@@ -131,7 +131,7 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(history, emptyList())
         val seed = track("seed", "Portishead", "Glory Box")
 
-        val reason = engine.buildReason(track("r1", "Radiohead"), vector, seed)
+        val reason = engine.buildReason(track("r1", "Radiohead"), vector, listOf(seed))
         assertTrue(reason.contains("Radiohead"), "reason should mention the familiar artist")
         assertTrue(reason.startsWith("Because you like"), reason)
     }
@@ -143,9 +143,9 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(history, emptyList())
         val seed = track("seed", "Top Artist", "Float On")
 
-        val reason = engine.buildReason(track("r1", "Modest Mouse"), vector, seed)
-        assertTrue(reason.contains("Float On"), reason)
-        assertTrue(reason.startsWith("Because you played"), reason)
+        val reason = engine.buildReason(track("r1", "Modest Mouse"), vector, listOf(seed))
+        assertTrue(reason.startsWith("You listen to"), reason)
+        assertTrue(reason.contains("Modest Mouse"), reason)
     }
 
     @Test
@@ -153,7 +153,7 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(emptyList(), emptyList())
         val seed = track("seed", "Known", "Known Song")
 
-        val reason = engine.buildReason(track("r1", "Brand New Band"), vector, seed)
+        val reason = engine.buildReason(track("r1", "Brand New Band"), vector, listOf(seed))
         assertTrue(reason.startsWith("Discover"), reason)
         assertTrue(reason.contains("Brand New Band"), reason)
     }
@@ -161,7 +161,7 @@ class RecommendationEngineTest {
     @Test
     fun `pickWithDiversity returns null for empty candidates`() {
         val vector = engine.buildListeningVector(emptyList(), emptyList())
-        val result = engine.pickWithDiversity(emptyList(), vector, track("s", "X"), emptyList(), emptyList())
+        val result = engine.pickWithDiversity(emptyList(), vector, listOf(track("s", "X")), emptyList(), emptyList())
         assertNull(result)
     }
 
@@ -171,7 +171,7 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(emptyList(), skips)
 
         val candidates = listOf(track("bad-track", "Artist A"), track("good-track", "Artist B"))
-        val result = engine.pickWithDiversity(candidates, vector, track("s", "X"), emptyList(), emptyList())
+        val result = engine.pickWithDiversity(candidates, vector, listOf(track("s", "X")), emptyList(), emptyList())
 
         assertNotNull(result)
         assertEquals("good-track", result.first.id)
@@ -190,7 +190,7 @@ class RecommendationEngineTest {
         )
 
         val result = engine.pickWithDiversity(
-            candidates, vector, seed, emptyList(), sessionArtists,
+            candidates, vector, listOf(seed), emptyList(), sessionArtists,
             maxConsecutiveSameArtist = 3
         )
 
@@ -210,7 +210,7 @@ class RecommendationEngineTest {
         )
 
         val result = engine.pickWithDiversity(
-            candidates, vector, track("s", "seed"), emptyList(), sessionArtists,
+            candidates, vector, listOf(track("s", "seed")), emptyList(), sessionArtists,
             noveltyBudget = 0.30f
         )
 
@@ -225,7 +225,7 @@ class RecommendationEngineTest {
         val candidates = listOf(track("t1", "Only Artist"))
 
         val result = engine.pickWithDiversity(
-            candidates, vector, track("s", "seed"), emptyList(), sessionArtists,
+            candidates, vector, listOf(track("s", "seed")), emptyList(), sessionArtists,
             maxConsecutiveSameArtist = 3
         )
 
@@ -238,7 +238,7 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(emptyList(), emptyList())
         val candidates = List(20) { track("t$it", "Artist ${it % 5}") }
 
-        val queue = engine.buildRadioQueue(candidates, vector, track("s", "Seed"), emptyList(), emptyList(), queueSize = 5)
+        val queue = engine.buildRadioQueue(candidates, vector, listOf(track("s", "Seed")), emptyList(), emptyList(), queueSize = 5)
 
         assertEquals(5, queue.size)
     }
@@ -248,7 +248,7 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(emptyList(), emptyList())
         val candidates = List(10) { track("t$it", "Artist ${it % 3}") }
 
-        val queue = engine.buildRadioQueue(candidates, vector, track("s", "Seed"), emptyList(), emptyList(), queueSize = 10)
+        val queue = engine.buildRadioQueue(candidates, vector, listOf(track("s", "Seed")), emptyList(), emptyList(), queueSize = 10)
 
         val ids = queue.map { it.track.id }
         assertEquals(ids.distinct(), ids, "each track should appear at most once")
@@ -263,7 +263,7 @@ class RecommendationEngineTest {
                 List(10) { track("u$it", "Unknown Artist $it") }
 
         val queue = engine.buildRadioQueue(
-            candidates, vector, track("s", "Seed"), emptyList(), emptyList(),
+            candidates, vector, listOf(track("s", "Seed")), emptyList(), emptyList(),
             queueSize = 10, noveltyBudget = 0.30f
         )
 
@@ -276,7 +276,7 @@ class RecommendationEngineTest {
         val vector = engine.buildListeningVector(emptyList(), emptyList())
         val candidates = List(3) { track("t$it", "Artist $it") }
 
-        val queue = engine.buildRadioQueue(candidates, vector, track("s", "Seed"), emptyList(), emptyList(), queueSize = 10)
+        val queue = engine.buildRadioQueue(candidates, vector, listOf(track("s", "Seed")), emptyList(), emptyList(), queueSize = 10)
 
         assertTrue(queue.size <= 3)
     }

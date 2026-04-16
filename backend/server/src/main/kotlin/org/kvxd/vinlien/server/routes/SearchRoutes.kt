@@ -7,23 +7,11 @@ import io.ktor.server.sse.*
 import io.ktor.sse.*
 import kotlinx.serialization.json.Json
 import org.kvxd.vinlien.backends.AggregationEngine
-import org.kvxd.vinlien.server.*
-import org.kvxd.vinlien.shared.models.SearchResponse
+import org.kvxd.vinlien.server.CacheManager
+import org.kvxd.vinlien.server.TrackFingerprint
+import org.kvxd.vinlien.shared.models.media.SearchResponse
 
 private val sseJson = Json { encodeDefaults = true }
-
-internal val searchCache = TtlCache<String, SearchResponse>(ttlMs = 30 * 60 * 1000L, maxSize = 500)
-
-private object TrackDeduplicator {
-    fun fingerprint(title: String): String {
-        var t = title.lowercase()
-        if (t.contains(" - ")) t = t.substringAfter(" - ")
-        t = t.replace(Regex("\\(.*?\\)|\\[.*?\\]"), "")
-        t = t.replace(Regex("[^a-z0-9 ]"), "")
-        t = t.replace(Regex("(?i)\\b(official|music video|lyric video|audio|live|remix|hd|hq|ft|feat)\\b"), "")
-        return t.trim().replace(Regex("\\s+"), " ")
-    }
-}
 
 fun Route.searchRoutes(engine: AggregationEngine) {
     get("/api/search") {
@@ -36,21 +24,21 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         }
 
         val cacheKey = "$query|${providersParam ?: ""}"
-        searchCache.get(cacheKey)?.let {
+        CacheManager.search.get(cacheKey)?.let {
             call.respond(it)
             return@get
         }
 
         val tracks = engine.searchTracks(query)
             .filter { it.artworkUrl != null }
-            .distinctBy { TrackDeduplicator.fingerprint(it.title) + it.artist.lowercase().take(6) }
+            .distinctBy { TrackFingerprint.of(it.title) + it.artist.lowercase().take(6) }
 
         val albums = engine.searchAlbums(query)
             .filter { it.artworkUrl != null }
-            .distinctBy { TrackDeduplicator.fingerprint(it.title) + TrackDeduplicator.fingerprint(it.artist) }
+            .distinctBy { TrackFingerprint.of(it.title) + TrackFingerprint.of(it.artist) }
 
         val response = SearchResponse(tracks, albums)
-        searchCache.put(cacheKey, response)
+        CacheManager.search.put(cacheKey, response)
         call.respond(response)
     }
 
@@ -72,7 +60,7 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         val providersParam = call.request.queryParameters["providers"]
 
         val cacheKey = "artist_tracks:$name|${providersParam ?: ""}"
-        searchCache.get(cacheKey)?.let {
+        CacheManager.search.get(cacheKey)?.let {
             call.respond(it.tracks)
             return@get
         }
@@ -85,9 +73,9 @@ fun Route.searchRoutes(engine: AggregationEngine) {
                 track.artists.any { it.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistNormalized } ||
                         track.artist.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistNormalized
             }
-            .distinctBy { TrackDeduplicator.fingerprint(it.title) }
+            .distinctBy { TrackFingerprint.of(it.title) }
 
-        searchCache.put(cacheKey, SearchResponse(tracks, emptyList()))
+        CacheManager.search.put(cacheKey, SearchResponse(tracks, emptyList()))
         call.respond(tracks)
     }
 
@@ -105,7 +93,7 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         }
 
         val cacheKey = "$query|"
-        val cached = searchCache.get(cacheKey)
+        val cached = CacheManager.search.get(cacheKey)
         if (cached != null) {
             send(ServerSentEvent(data = sseJson.encodeToString(SearchResponse.serializer(), cached)))
             send(ServerSentEvent(event = "done", data = ""))
@@ -115,9 +103,9 @@ fun Route.searchRoutes(engine: AggregationEngine) {
         var lastResponse: SearchResponse? = null
         engine.searchStreaming(query).collect { raw ->
             val tracks = raw.tracks
-                .distinctBy { TrackDeduplicator.fingerprint(it.title) + it.artist.lowercase().take(6) }
+                .distinctBy { TrackFingerprint.of(it.title) + it.artist.lowercase().take(6) }
             val albums = raw.albums
-                .distinctBy { TrackDeduplicator.fingerprint(it.title) + TrackDeduplicator.fingerprint(it.artist) }
+                .distinctBy { TrackFingerprint.of(it.title) + TrackFingerprint.of(it.artist) }
             val response = SearchResponse(tracks, albums)
             if (tracks.isNotEmpty() || albums.isNotEmpty()) {
                 lastResponse = response
@@ -125,7 +113,7 @@ fun Route.searchRoutes(engine: AggregationEngine) {
             }
         }
 
-        lastResponse?.let { searchCache.put(cacheKey, it) }
+        lastResponse?.let { CacheManager.search.put(cacheKey, it) }
         send(ServerSentEvent(event = "done", data = ""))
     }
 }

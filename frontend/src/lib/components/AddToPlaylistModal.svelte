@@ -4,6 +4,7 @@
     import {addToast} from '$lib/utils/toast';
     import {apiRequest} from '$lib/utils/api';
     import {downloadTrack} from '$lib/utils/offlineAudio';
+    import {proxyArtwork} from '$lib/utils/artwork';
 
     let newPlaylistName = '';
     let isCreating = false;
@@ -20,15 +21,17 @@
         if (!$trackToAdd) return;
         if (!requireOnline('Cannot modify playlist while offline')) return;
         const track = $trackToAdd;
+        $trackToAdd = null;
         try {
             await apiRequest(`/api/playlists/${playlistId}/tracks`, {method: 'POST', body: track});
+            await loadPlaylists();
             addToast('Added to playlist', 'success');
             if (get(autoDownloadPlaylists).includes(playlistId)) {
                 downloadTrack(track).catch(() => {});
             }
         } catch (e) {
+            addToast('Failed to add to playlist', 'error');
         }
-        $trackToAdd = null;
     }
 
     async function createAndAdd() {
@@ -73,7 +76,7 @@
             </div>
 
             <div class="track-preview">
-                <img src={$trackToAdd.artworkUrl} alt="art">
+                <img src={proxyArtwork($trackToAdd.artworkUrl)} alt="art">
                 <div>
                     <div class="title">{$trackToAdd.title}</div>
                     <div class="artist">{$trackToAdd.artist}</div>
@@ -81,7 +84,7 @@
             </div>
 
             <div class="playlist-list">
-                {#each $userPlaylists as pl}
+                {#each $userPlaylists.filter(pl => pl.name !== 'Liked Songs' && pl.name !== 'Disliked Songs') as pl}
                     <button class="playlist-btn" on:click={() => addToPlaylist(pl.id)}>
                         <div class="pl-avatar">
                             {#if pl.name === 'Liked Songs'}

@@ -1,3 +1,8 @@
+export function proxyArtwork(url: string | null | undefined): string | undefined {
+    if (!url) return undefined;
+    return `/api/artwork?url=${encodeURIComponent(url)}`;
+}
+
 export function placeholderGradient(seed: string): string {
     let h = 0;
     for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
