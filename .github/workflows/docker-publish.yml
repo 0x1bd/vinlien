@@ -3,9 +3,6 @@ name: Make and Publish Docker Image
 on:
   push:
     branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ "main" ]
 
 env:
   REGISTRY: ghcr.io
