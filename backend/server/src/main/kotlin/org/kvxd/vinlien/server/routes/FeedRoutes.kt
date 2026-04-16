@@ -4,7 +4,7 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.v1.jdbc.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.CacheManager
 import org.kvxd.vinlien.server.DatabaseFactory

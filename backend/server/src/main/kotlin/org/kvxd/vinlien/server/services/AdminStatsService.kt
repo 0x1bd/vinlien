@@ -1,6 +1,7 @@
 package org.kvxd.vinlien.server.services
 
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import org.kvxd.vinlien.server.*
 import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.shared.models.admin.*

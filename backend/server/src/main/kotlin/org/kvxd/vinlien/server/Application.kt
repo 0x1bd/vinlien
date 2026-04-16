@@ -16,7 +16,8 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.backends.Capability
 import org.kvxd.vinlien.backends.deezer.DeezerMetadataProvider
