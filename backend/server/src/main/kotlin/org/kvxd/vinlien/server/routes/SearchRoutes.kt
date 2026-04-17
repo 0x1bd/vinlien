@@ -44,14 +44,22 @@ fun Route.searchRoutes(engine: AggregationEngine) {
 
     get("/api/artist/{name}") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.artistInfo.get(name)?.let { call.respond(it); return@get }
         val info = engine.getArtistInfo(name)
-        if (info != null) call.respond(info) else call.respond(HttpStatusCode.NotFound)
+        if (info != null) {
+            CacheManager.artistInfo.put(name, info)
+            call.respond(info)
+        } else {
+            call.respond(HttpStatusCode.NotFound)
+        }
     }
 
     get("/api/artist/{name}/albums") {
         val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.artistAlbums.get(name)?.let { call.respond(it); return@get }
         val albums = engine.getArtistAlbums(name)
             .distinctBy { it.title.lowercase().replace(Regex("[^a-z]"), "") }
+        CacheManager.artistAlbums.put(name, albums)
         call.respond(albums)
     }
 
@@ -81,8 +89,14 @@ fun Route.searchRoutes(engine: AggregationEngine) {
 
     get("/api/album/{id}") {
         val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.albumDetail.get(id)?.let { call.respond(it); return@get }
         val album = engine.getAlbum(id)
-        if (album != null) call.respond(album) else call.respond(HttpStatusCode.NotFound)
+        if (album != null) {
+            CacheManager.albumDetail.put(id, album)
+            call.respond(album)
+        } else {
+            call.respond(HttpStatusCode.NotFound)
+        }
     }
 
     sse("/api/search/stream") {

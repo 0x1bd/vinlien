@@ -29,6 +29,13 @@ fun Route.artworkRoutes() {
             return@get
         }
 
+        CacheManager.diskArtwork.get(url)?.let { (bytes, ct) ->
+            CacheManager.artwork.put(url, bytes to ct)
+            call.response.header(HttpHeaders.CacheControl, "public, max-age=86400")
+            call.respondBytes(bytes, ContentType.parse(ct))
+            return@get
+        }
+
         try {
             val upstream = artworkClient.get(url) {
                 header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
@@ -40,6 +47,7 @@ fun Route.artworkRoutes() {
             val bytes = upstream.readRawBytes()
             val ct = upstream.contentType()?.toString() ?: "image/jpeg"
             CacheManager.artwork.put(url, bytes to ct)
+            CacheManager.diskArtwork.put(url, bytes, ct)
             call.response.header(HttpHeaders.CacheControl, "public, max-age=86400")
             call.respondBytes(bytes, ContentType.parse(ct))
         } catch (e: Exception) {

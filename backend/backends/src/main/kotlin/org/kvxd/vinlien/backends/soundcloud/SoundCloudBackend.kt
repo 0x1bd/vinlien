@@ -12,6 +12,7 @@ import org.kvxd.vinlien.backends.fetch
 import org.kvxd.vinlien.backends.sharedJson
 import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.net.URLEncoder
 
 @Serializable
@@ -88,8 +89,22 @@ class SoundCloudBackend : MusicProvider {
     override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, Capability.AUDIO_STREAM)
 
     private val logger = LoggerFactory.getLogger(SoundCloudBackend::class.java)
-    private var clientId: String? = null
+    private var clientId: String? = loadPersistedClientId()
     private val mutex = Mutex()
+    private val persistFile = File("data/cache/sc_client_id.txt")
+
+    private fun loadPersistedClientId(): String? = try {
+        val f = File("data/cache/sc_client_id.txt")
+        if (f.exists()) f.readText().trim().takeIf { it.isNotBlank() } else null
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun persistClientId(id: String) = try {
+        persistFile.parentFile?.mkdirs()
+        persistFile.writeText(id)
+    } catch (_: Exception) {
+    }
 
     private suspend fun getClientId(): String = mutex.withLock {
         clientId?.let { return it }
@@ -103,6 +118,7 @@ class SoundCloudBackend : MusicProvider {
                 val match = Regex("""client_id:"([a-zA-Z0-9]{32})"""").find(js)
                 if (match != null) {
                     clientId = match.groupValues[1]
+                    persistClientId(clientId!!)
                     logger.info("Found SoundCloud client_id: $clientId")
                     return clientId!!
                 }

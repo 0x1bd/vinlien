@@ -18,9 +18,13 @@ class TtlCache<K : Any, V : Any>(
     }
 
     fun put(key: K, value: V) {
-        if (entries.size >= maxSize) entries.clear()
+        if (entries.size >= maxSize) {
+            entries.entries.minByOrNull { it.value.first }?.key?.let { entries.remove(it) }
+        }
         entries[key] = System.currentTimeMillis() to value
     }
+
+    fun remove(key: K) = entries.remove(key)
 
     fun clear() = entries.clear()
 }

@@ -34,12 +34,16 @@ fun Route.feedRoutes(engine: AggregationEngine) {
                 it[timestamp] = System.currentTimeMillis()
             }
         }
+        CacheManager.homeFeed.remove(userId)
         call.respond(HttpStatusCode.OK)
     }
 
     get("/api/home/feed") {
         val userId = call.getUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized)
-        call.respond(HomeFeedService.buildFeed(userId))
+        CacheManager.homeFeed.get(userId)?.let { call.respond(it); return@get }
+        val feed = HomeFeedService.buildFeed(userId)
+        CacheManager.homeFeed.put(userId, feed)
+        call.respond(feed)
     }
 
     get("/api/home/trending") {
