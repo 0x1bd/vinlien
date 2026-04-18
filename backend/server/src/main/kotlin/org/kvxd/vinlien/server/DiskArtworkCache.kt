@@ -28,6 +28,7 @@ class DiskArtworkCache(
         } catch (_: Exception) { null }
     }
 
+    @Synchronized
     fun put(url: String, bytes: ByteArray, contentType: String) {
         try {
             evictIfNeeded(bytes.size.toLong())
@@ -41,7 +42,6 @@ class DiskArtworkCache(
 
     fun clear() { dir.listFiles()?.forEach { it.delete() } }
 
-    @Synchronized
     private fun evictIfNeeded(incoming: Long) {
         val imageFiles = dir.listFiles { f -> !f.name.endsWith(".ct") && !f.name.endsWith(".tmp") } ?: return
         var totalSize = imageFiles.sumOf { it.length() }

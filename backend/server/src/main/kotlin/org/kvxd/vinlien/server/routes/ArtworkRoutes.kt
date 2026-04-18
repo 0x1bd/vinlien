@@ -5,9 +5,18 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.*
@@ -23,12 +32,21 @@ data class ArtworkEnrichRequest(val id: String, val title: String, val artist: S
 @Serializable
 data class ArtworkEnrichResponse(val artworkUrl: String?)
 
+@Serializable
+data class ArtworkBatchEnrichRequest(val tracks: List<ArtworkEnrichRequest>)
+
+@Serializable
+data class ArtworkBatchEnrichResponse(val results: Map<String, String?>)
+
 private val artworkClient = HttpClient(CIO) {
     engine { requestTimeout = 8_000 }
     followRedirects = true
 }
 
-private val artworkLogger = LoggerFactory.getLogger("ArtworkProxy")
+private val logger = LoggerFactory.getLogger("ArtworkProxy")
+
+private val inflightMutex = Mutex()
+private val inflightMap = mutableMapOf<String, CompletableDeferred<Pair<ByteArray, String>?>>()
 
 fun Route.artworkRoutes(engine: AggregationEngine) {
     get("/api/artwork") {
@@ -40,15 +58,31 @@ fun Route.artworkRoutes(engine: AggregationEngine) {
         }
 
         CacheManager.artwork.get(url)?.let { (bytes, ct) ->
-            call.response.header(HttpHeaders.CacheControl, "public, max-age=86400")
-            call.respondBytes(bytes, ContentType.parse(ct))
+            call.respondCached(bytes, ct)
             return@get
         }
 
         CacheManager.diskArtwork.get(url)?.let { (bytes, ct) ->
             CacheManager.artwork.put(url, bytes to ct)
-            call.response.header(HttpHeaders.CacheControl, "public, max-age=86400")
-            call.respondBytes(bytes, ContentType.parse(ct))
+            call.respondCached(bytes, ct)
+            return@get
+        }
+
+        val (deferred, isOwner) = inflightMutex.withLock {
+            val existing = inflightMap[url]
+            if (existing != null) {
+                existing to false
+            } else {
+                val d = CompletableDeferred<Pair<ByteArray, String>?>()
+                inflightMap[url] = d
+                d to true
+            }
+        }
+
+        if (!isOwner) {
+            val result = deferred.await()
+                ?: return@get call.respond(HttpStatusCode.BadGateway)
+            call.respondCached(result.first, result.second)
             return@get
         }
 
@@ -57,7 +91,8 @@ fun Route.artworkRoutes(engine: AggregationEngine) {
                 header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
             }
             if (!upstream.status.isSuccess()) {
-                artworkLogger.warn("Upstream returned ${upstream.status.value} for: $url")
+                logger.warn("Upstream {} for: {}", upstream.status.value, url)
+                deferred.complete(null)
                 call.respond(upstream.status)
                 return@get
             }
@@ -65,37 +100,56 @@ fun Route.artworkRoutes(engine: AggregationEngine) {
             val ct = upstream.contentType()?.toString() ?: "image/jpeg"
             CacheManager.artwork.put(url, bytes to ct)
             CacheManager.diskArtwork.put(url, bytes, ct)
-            call.response.header(HttpHeaders.CacheControl, "public, max-age=86400")
-            call.respondBytes(bytes, ContentType.parse(ct))
+            deferred.complete(bytes to ct)
+            call.respondCached(bytes, ct)
         } catch (e: Exception) {
-            artworkLogger.warn("Artwork proxy failed for {}: {}", url, e.message)
+            logger.warn("Artwork proxy failed for {}: {}", url, e.message)
+            deferred.complete(null)
             call.respond(HttpStatusCode.BadGateway)
+        } finally {
+            inflightMutex.withLock { inflightMap.remove(url) }
         }
     }
 
     post("/api/artwork/enrich") {
         val req = call.receive<ArtworkEnrichRequest>()
-
-        val storedArtwork = dbQuery {
-            Tracks.selectAll().where { Tracks.id eq req.id }
-                .map { it[Tracks.artworkUrl] }
-                .firstOrNull()
-        }
-        if (storedArtwork != null && !storedArtwork.contains("ytimg.com")) {
-            call.respond(ArtworkEnrichResponse(storedArtwork))
-            return@post
-        }
-
-        val artworkUrl = runCatching { engine.enrichArtwork(req.title, req.artist) }.getOrNull()
-
-        if (artworkUrl != null) {
-            dbQuery {
-                Tracks.update({ Tracks.id eq req.id }) {
-                    it[Tracks.artworkUrl] = artworkUrl
-                }
-            }
-        }
-
-        call.respond(ArtworkEnrichResponse(artworkUrl))
+        call.respond(ArtworkEnrichResponse(enrichTrack(req, engine)))
     }
+
+    post("/api/artwork/enrich/batch") {
+        val req = call.receive<ArtworkBatchEnrichRequest>()
+        val tracks = req.tracks.take(25)
+
+        val semaphore = Semaphore(5)
+        val results: Map<String, String?> = coroutineScope {
+            tracks.map { item ->
+                async { item.id to semaphore.withPermit { enrichTrack(item, engine) } }
+            }.awaitAll()
+        }.toMap()
+        call.respond(ArtworkBatchEnrichResponse(results))
+    }
+}
+
+private suspend fun ApplicationCall.respondCached(bytes: ByteArray, ct: String) {
+    response.header(HttpHeaders.CacheControl, "public, max-age=2592000, immutable")
+    respondBytes(bytes, ContentType.parse(ct))
+}
+
+private suspend fun enrichTrack(req: ArtworkEnrichRequest, engine: AggregationEngine): String? {
+    val stored = dbQuery {
+        Tracks.selectAll().where { Tracks.id eq req.id }
+            .map { it[Tracks.artworkUrl] }
+            .firstOrNull()
+    }
+    if (stored != null && !stored.contains("ytimg.com")) return stored
+
+    val artworkUrl = runCatching { engine.enrichArtwork(req.title, req.artist) }.getOrNull()
+
+    if (artworkUrl != null) {
+        dbQuery {
+            Tracks.update({ Tracks.id eq req.id }) { it[Tracks.artworkUrl] = artworkUrl }
+        }
+    }
+
+    return artworkUrl
 }

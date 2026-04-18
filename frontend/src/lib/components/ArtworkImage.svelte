@@ -6,67 +6,58 @@
 
     $: proxiedSrc = proxyArtwork(src);
 
-    let error = false;
-    let loading = false;
-    let loadedSrc: string | null = null;
-    let imgKey = 0;
+    let imgSrc: string | undefined = undefined;
+    let imageVisible = false;
+    let failed = false;      // true = gave up after retries; reset only when src changes
     let retried = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let imgKey = 0;
 
-    function clearRetryTimer() {
+    function clearTimer() {
         if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
     }
 
-    function onLoad() {
-        clearRetryTimer();
-        loading = false;
-        error = false;
-        loadedSrc = proxiedSrc ?? null;
-    }
-
-    function onError() {
-        if (!retried && proxiedSrc) {
-            retried = true;
-            retryTimer = setTimeout(() => {
-                error = false;
-                loading = true;
-                imgKey++;
-            }, 3000);
-        } else {
-            clearRetryTimer();
-            loading = false;
-            error = true;
-            loadedSrc = null;
+    // Reset state whenever the source URL changes
+    $: {
+        if (proxiedSrc !== imgSrc) {
+            clearTimer();
+            imageVisible = false;
+            retried = false;
+            failed = false;
+            imgSrc = proxiedSrc;
         }
     }
 
-    $: {
-        const next = proxiedSrc ?? null;
-        if (next !== loadedSrc) {
-            clearRetryTimer();
-            error = false;
-            retried = false;
-            loading = !!next;
-            if (!next) loadedSrc = null;
+    function onLoad() {
+        clearTimer();
+        imageVisible = true;
+    }
+
+    function onError() {
+        if (!retried && imgSrc) {
+            retried = true;
+            retryTimer = setTimeout(() => { imgKey++; }, 3000);
+        } else {
+            clearTimer();
+            failed = true;
+            imageVisible = false;
         }
     }
 </script>
 
 <div class="art-root">
-    {#if proxiedSrc && !error}
-        {#if loading}
-            <div class="art-spinner"></div>
-        {/if}
+    <div class="art-placeholder"
+         class:loading={!!imgSrc && !imageVisible && !failed}
+         style="background: {placeholderGradient(seed)}">
+        {#if !imageVisible}<slot/>{/if}
+    </div>
+    {#if imgSrc && !failed}
         {#key imgKey}
-            <img src={proxiedSrc} alt=""
-                 style:visibility={loading ? 'hidden' : 'visible'}
+            <img src={imgSrc} alt=""
+                 class:visible={imageVisible}
                  on:load={onLoad}
                  on:error={onError}>
         {/key}
-    {:else}
-        <div class="art-placeholder" style="background: {placeholderGradient(seed)}">
-            <slot/>
-        </div>
     {/if}
 </div>
 
@@ -79,7 +70,7 @@
         overflow: hidden;
     }
 
-    img, .art-placeholder, .art-spinner {
+    .art-placeholder, img {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -87,35 +78,40 @@
         border-radius: inherit;
     }
 
-    img {
-        object-fit: cover;
-        display: block;
-    }
-
-    .art-spinner {
-        background: var(--bg-elevated);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .art-spinner::after {
-        content: '';
-        width: 35%;
-        height: 35%;
-        border: 2px solid var(--border-subtle);
-        border-top-color: var(--text-secondary);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
     .art-placeholder {
         display: flex;
         align-items: center;
         justify-content: center;
+        overflow: hidden;
+    }
+
+    .art-placeholder.loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            105deg,
+            transparent 30%,
+            rgba(255, 255, 255, 0.08) 50%,
+            transparent 70%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.6s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    img {
+        object-fit: cover;
+        display: block;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+
+    img.visible {
+        opacity: 1;
     }
 </style>
