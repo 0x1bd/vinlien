@@ -12,5 +12,7 @@ data class Track(
     val streamUrl: String? = null,
     val artworkUrl: String? = null,
     val canonicalId: String? = null,
-    val lastFmUrl: String? = null
+    val lastFmUrl: String? = null,
+    val albumTitle: String? = null,
+    val albumId: String? = null
 )

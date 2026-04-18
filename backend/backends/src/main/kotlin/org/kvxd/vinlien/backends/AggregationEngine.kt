@@ -106,7 +106,39 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
 
     suspend fun getArtistAlbums(artist: String): List<Album> {
         val raw = parallelQuery<List<Album>>(Capability.ARTIST_ALBUMS) { it.getArtistAlbums(artist) }.flatten()
-        return AlbumMerger.dedup(raw.map { Normalizer.normalizeAlbum(it) })
+        return deduplicateAlbumVariants(AlbumMerger.dedup(raw.map { Normalizer.normalizeAlbum(it) }))
+    }
+
+    private fun deduplicateAlbumVariants(albums: List<Album>): List<Album> {
+        if (albums.size <= 1) return albums
+        val rawKeys = albums.map { it.title.lowercase().replace(Regex("[^a-z0-9]"), "") }
+        val normKeys = albums.map { albumNormKey(it.title) }
+        val dominated = BooleanArray(albums.size)
+        for (i in albums.indices) {
+            if (dominated[i]) continue
+            for (j in albums.indices) {
+                if (i == j || dominated[j]) continue
+                val ri = rawKeys[i]; val rj = rawKeys[j]
+                val ni = normKeys[i]; val nj = normKeys[j]
+                val jSupersetOfI = rj.startsWith(ri) && rj.length > ri.length
+                val sameNormNoYear = ni == nj && albums[i].year == null && albums[j].year != null
+                val sameNormBothYear = ni == nj && ni != ri && albums[i].year != null && albums[j].year != null && i > j
+                if (jSupersetOfI || sameNormNoYear || sameNormBothYear) {
+                    dominated[i] = true
+                    break
+                }
+            }
+        }
+        return albums.filterIndexed { i, _ -> !dominated[i] }
+    }
+
+    private val ALBUM_QUALIFIER_WORDS = setOf(
+        "official", "original", "deluxe", "special", "extended", "limited", "edition", "remastered", "remaster", "feat"
+    )
+
+    private fun albumNormKey(title: String): String {
+        val words = title.lowercase().replace(Regex("[^a-z0-9 ]"), " ").trim().split(Regex("\\s+"))
+        return words.filter { it !in ALBUM_QUALIFIER_WORDS }.joinToString("")
     }
 
     suspend fun getArtistInfo(name: String): ArtistInfo? {
@@ -133,7 +165,8 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         val enriched = if (metaProviders.isEmpty()) normalized else coroutineScope {
             normalized.map { t ->
                 async {
-                    if (t.id.matches(YT_ID_REGEX)) enrichWithMetadata(t, metaProviders) else t
+                    val needsArtwork = t.artworkUrl == null || t.artworkUrl!!.contains("ytimg.com")
+                    if (needsArtwork) enrichWithMetadata(t, metaProviders) else t
                 }
             }.awaitAll()
         }
@@ -155,6 +188,16 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
                 (if (hasDuration) RecommendationSignalWeights.HAS_DURATION else 0)
     }
 
+    suspend fun enrichArtwork(title: String, artist: String): String? {
+        val query = "$artist $title"
+        val target = Track(id = "", title = title, artist = artist, durationMs = 0)
+        val raw = parallelQuery(Capability.TRACK_SEARCH) { it.searchTracks(query) }.flatten()
+        val merged = TrackMerger.merge(raw.map { Normalizer.normalizeTrack(it) })
+
+        return merged.firstOrNull { it.artworkUrl != null && !it.artworkUrl!!.contains("ytimg.com") && fuzzyMatch(it, target) }?.artworkUrl
+            ?: merged.firstOrNull { it.artworkUrl != null && fuzzyMatch(it, target) }?.artworkUrl
+    }
+
     private suspend fun enrichWithMetadata(track: Track, metaProviders: List<MusicProvider>): Track {
         val query = "${track.artist} ${track.title}"
         for (provider in metaProviders) {
@@ -168,7 +211,9 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
                 artists = match.artists.ifEmpty { track.artists },
                 artworkUrl = match.artworkUrl ?: track.artworkUrl,
                 lastFmUrl = match.lastFmUrl ?: track.lastFmUrl,
-                canonicalId = match.canonicalId ?: track.canonicalId
+                canonicalId = match.canonicalId ?: track.canonicalId,
+                albumTitle = match.albumTitle ?: track.albumTitle,
+                albumId = match.albumId ?: track.albumId
             )
         }
         return track
@@ -205,7 +250,7 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
     private fun fuzzyMatch(candidate: Track, target: Track): Boolean {
         val candidateTitle = candidate.title.normalized()
         val targetTitle = target.title.normalized()
-        if (candidateTitle.length < 4 || targetTitle.length < 4) return false
+        if (candidateTitle.isEmpty() || targetTitle.isEmpty()) return false
 
         val candidateWords = candidateTitle.split(" ").toSet()
         val targetWords = targetTitle.split(" ").toSet()

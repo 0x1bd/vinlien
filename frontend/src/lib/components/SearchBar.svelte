@@ -3,7 +3,7 @@
     import {goto} from '$app/navigation';
     import {apiRequest} from '$lib/utils/api';
     import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
-    import type {Track, SearchResponse} from '$lib/utils/types';
+    import type {Track, Album, SearchResponse} from '$lib/utils/types';
     import TrackRow from '$lib/components/TrackRow.svelte';
     import AlbumCard from '$lib/components/AlbumCard.svelte';
 
@@ -23,8 +23,8 @@
 
     function computeUniqueArtists(results: SearchResponse): string[] {
         return Array.from(new Set([
-            ...results.tracks.flatMap((t: any) => t.artists as string[]),
-            ...results.albums.map((a: any) => a.artist as string)
+            ...results.tracks.flatMap((t: Track) => t.artists),
+            ...results.albums.map((a: Album) => a.artist)
         ])).slice(0, 5);
     }
 
@@ -122,13 +122,11 @@
                     <div class="search-section-title">Artists</div>
                     <div class="artist-pills">
                         {#each uniqueArtists as artist}
-                            <!-- svelte-ignore a11y-click-events-have-key-events -->
-                            <!-- svelte-ignore a11y-no-static-element-interactions -->
-                            <div class="artist-pill"
+                            <button class="artist-pill"
                                  on:click={() => { isSearchOpen = false; query = ''; goto(`/artist/${encodeURIComponent(artist)}`); }}>
                                 <div class="artist-pill-avatar">{artist[0].toUpperCase()}</div>
                                 <span>{artist}</span>
-                            </div>
+                            </button>
                         {/each}
                     </div>
                 {/if}
@@ -207,8 +205,11 @@
         align-items: center;
         gap: 8px;
         background: var(--bg-hover);
+        border: none;
         padding: 6px 12px 6px 6px;
         border-radius: 32px;
+        color: var(--text-primary);
+        font: inherit;
         cursor: pointer;
         transition: 0.2s;
     }

@@ -28,6 +28,8 @@ object Tracks : Table("vl_tracks") {
     val artworkUrl = text("artwork_url").nullable()
     val canonicalId = varchar("canonical_id", 100).nullable()
     val lastFmUrl = text("last_fm_url").nullable()
+    val albumTitle = varchar("album_title", 255).nullable()
+    val albumId = varchar("album_id", 255).nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -106,7 +108,9 @@ object DatabaseFactory {
             streamUrl = this[Tracks.streamUrl],
             artworkUrl = this[Tracks.artworkUrl],
             canonicalId = this[Tracks.canonicalId],
-            lastFmUrl = this[Tracks.lastFmUrl]
+            lastFmUrl = this[Tracks.lastFmUrl],
+            albumTitle = this[Tracks.albumTitle],
+            albumId = this[Tracks.albumId]
         )
     )
 
@@ -122,6 +126,8 @@ object DatabaseFactory {
                 it[artworkUrl] = track.artworkUrl
                 it[canonicalId] = track.canonicalId
                 it[lastFmUrl] = track.lastFmUrl
+                it[albumTitle] = track.albumTitle
+                it[albumId] = track.albumId
             }
         } else {
             Tracks.update({ Tracks.id eq track.id }) {
@@ -132,6 +138,8 @@ object DatabaseFactory {
                 if (track.artworkUrl != null) it[artworkUrl] = track.artworkUrl
                 if (track.canonicalId != null) it[canonicalId] = track.canonicalId
                 if (track.lastFmUrl != null) it[lastFmUrl] = track.lastFmUrl
+                if (track.albumTitle != null) it[albumTitle] = track.albumTitle
+                if (track.albumId != null) it[albumId] = track.albumId
             }
         }
     }

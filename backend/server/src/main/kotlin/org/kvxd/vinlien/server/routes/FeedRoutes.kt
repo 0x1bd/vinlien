@@ -12,17 +12,12 @@ import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
 import org.kvxd.vinlien.server.History
 import org.kvxd.vinlien.server.getUserId
 import org.kvxd.vinlien.server.services.HomeFeedService
+import org.kvxd.vinlien.server.services.RecService
 import org.kvxd.vinlien.shared.models.media.Track
 
 private const val TRENDING_CACHE_KEY = "trending"
 
 fun Route.feedRoutes(engine: AggregationEngine) {
-    put("/api/tracks") {
-        val track = call.receive<Track>()
-        dbQuery { DatabaseFactory.insertOrUpdateTrack(track) }
-        call.respond(HttpStatusCode.OK)
-    }
-
     post("/api/history") {
         val track = call.receive<Track>()
         val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
@@ -35,6 +30,7 @@ fun Route.feedRoutes(engine: AggregationEngine) {
             }
         }
         CacheManager.homeFeed.remove(userId)
+        RecService.invalidate(userId)
         call.respond(HttpStatusCode.OK)
     }
 

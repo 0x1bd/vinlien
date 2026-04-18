@@ -4,7 +4,7 @@
     import {apiRequest} from '$lib/utils/api';
     import TrackRow from '$lib/components/TrackRow.svelte';
     import ArtworkImage from '$lib/components/ArtworkImage.svelte';
-    import type {Album} from '$lib/utils/types';
+    import type {Album, Track} from '$lib/utils/types';
 
     let album: Album | null = null;
 
@@ -12,7 +12,7 @@
         apiRequest(`/api/album/${encodeURIComponent($page.params.id)}`).then(res => album = res);
     }
 
-    function withArt(track: any) {
+    function withArt(track: Track) {
         return {...track, artworkUrl: track.artworkUrl || album?.artworkUrl};
     }
 

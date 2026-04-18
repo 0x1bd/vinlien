@@ -86,7 +86,7 @@ private data class ScStreamResponse(val url: String? = null)
 class SoundCloudBackend : MusicProvider {
     override val id = "sc"
     override val name = "SoundCloud"
-    override val capabilities = setOf(Capability.TRACK_SEARCH, Capability.TRENDING, Capability.AUDIO_STREAM)
+    override val capabilities = setOf(Capability.TRENDING, Capability.AUDIO_STREAM)
 
     private val logger = LoggerFactory.getLogger(SoundCloudBackend::class.java)
     private var clientId: String? = loadPersistedClientId()

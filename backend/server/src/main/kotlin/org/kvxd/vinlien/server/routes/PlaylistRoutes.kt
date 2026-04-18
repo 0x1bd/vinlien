@@ -29,7 +29,9 @@ fun Route.playlistRoutes() {
         }
 
         put("/{id}/info") {
+            val userId = call.getUserId() ?: return@put call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@put call.respond(HttpStatusCode.Forbidden)
             val req = call.receive<PlaylistEditReq>()
             PlaylistService.updateInfo(playlistId, req.name, req.description, req.imageUrl)
             call.respond(HttpStatusCode.OK)
@@ -50,21 +52,27 @@ fun Route.playlistRoutes() {
         }
 
         post("/{id}/tracks") {
+            val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@post call.respond(HttpStatusCode.Forbidden)
             val track = call.receive<Track>()
             PlaylistService.addTrack(playlistId, track)
             call.respond(HttpStatusCode.OK)
         }
 
         put("/{id}/tracks") {
+            val userId = call.getUserId() ?: return@put call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@put call.respond(HttpStatusCode.Forbidden)
             val newTracks = call.receive<List<Track>>()
             PlaylistService.replaceTracks(playlistId, newTracks)
             call.respond(HttpStatusCode.OK)
         }
 
         delete("/{id}") {
+            val userId = call.getUserId() ?: return@delete call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@delete call.respond(HttpStatusCode.Forbidden)
             PlaylistService.delete(playlistId)
             call.respond(HttpStatusCode.OK)
         }

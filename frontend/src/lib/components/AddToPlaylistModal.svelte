@@ -61,9 +61,9 @@
 <svelte:window on:keydown={handleKeydown}/>
 
 {#if $trackToAdd}
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="modal-backdrop" on:click={() => $trackToAdd = null}>
+    <div class="modal-backdrop" role="button" tabindex="-1"
+         on:click={() => $trackToAdd = null}
+         on:keydown={e => e.key === 'Escape' && ($trackToAdd = null)}>
         <div class="modal-content" on:click|stopPropagation>
             <div class="modal-header">
                 <h3>Add to Playlist</h3>

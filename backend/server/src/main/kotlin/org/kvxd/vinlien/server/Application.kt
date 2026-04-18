@@ -91,6 +91,7 @@ fun Application.module() {
     }
 
     val engine = AggregationEngine(providers)
+    val recEngine = RecommendationEngine()
 
     routing {
         authRoutes(Config.data.jwtSecret)
@@ -108,10 +109,11 @@ fun Application.module() {
 
         authenticate("auth-jwt") {
             searchRoutes(engine)
+            catalogRoutes(engine)
             streamRoutes(engine)
-            artworkRoutes()
+            artworkRoutes(engine)
             feedRoutes(engine)
-            recRoutes(engine)
+            recRoutes(engine, recEngine)
             adminRoutes()
             playlistRoutes()
         }

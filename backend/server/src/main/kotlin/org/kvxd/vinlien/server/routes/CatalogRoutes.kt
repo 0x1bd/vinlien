@@ -1,0 +1,60 @@
+package org.kvxd.vinlien.server.routes
+
+import io.ktor.http.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import org.kvxd.vinlien.backends.AggregationEngine
+import org.kvxd.vinlien.server.CacheManager
+import org.kvxd.vinlien.server.TrackFingerprint
+
+fun Route.catalogRoutes(engine: AggregationEngine) {
+    get("/api/artist/{name}") {
+        val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.artistInfo.get(name)?.let { call.respond(it); return@get }
+        val info = engine.getArtistInfo(name)
+        if (info != null) {
+            CacheManager.artistInfo.put(name, info)
+            call.respond(info)
+        } else {
+            call.respond(HttpStatusCode.NotFound)
+        }
+    }
+
+    get("/api/artist/{name}/albums") {
+        val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.artistAlbums.get(name)?.let { call.respond(it); return@get }
+        val albums = engine.getArtistAlbums(name).filter { it.artworkUrl != null }
+        CacheManager.artistAlbums.put(name, albums)
+        call.respond(albums)
+    }
+
+    get("/api/artist/{name}/tracks") {
+        val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.artistTracks.get(name)?.let { call.respond(it); return@get }
+
+        val targetArtistNormalized = name.lowercase().replace(Regex("[^a-z0-9]"), "")
+
+        val tracks = engine.searchTracks(name)
+            .filter { it.artworkUrl != null }
+            .filter { track ->
+                track.artists.any { it.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistNormalized } ||
+                        track.artist.lowercase().replace(Regex("[^a-z0-9]"), "") == targetArtistNormalized
+            }
+            .distinctBy { TrackFingerprint.of(it.title) }
+
+        CacheManager.artistTracks.put(name, tracks)
+        call.respond(tracks)
+    }
+
+    get("/api/album/{id}") {
+        val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        CacheManager.albumDetail.get(id)?.let { call.respond(it); return@get }
+        val album = engine.getAlbum(id)
+        if (album != null) {
+            CacheManager.albumDetail.put(id, album)
+            call.respond(album)
+        } else {
+            call.respond(HttpStatusCode.NotFound)
+        }
+    }
+}

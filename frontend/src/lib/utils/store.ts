@@ -28,7 +28,7 @@ function createPersistedStore<T>(key: string, initialValue: T) {
     return store;
 }
 
-const initialUser = browser ? JSON.parse(localStorage.getItem('user') || 'null') : null;
+const initialUser = browser ? (() => { try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; } })() : null;
 export const user = writable<User | null>(initialUser);
 
 if (browser) {

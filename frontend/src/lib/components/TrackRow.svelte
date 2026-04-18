@@ -16,23 +16,21 @@
     }
 </script>
 
-<!-- svelte-ignore a11y-click-events-have-key-events -->
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="track-row" on:click={onPlay}>
+<div class="track-row" role="button" tabindex="0"
+     on:click={onPlay}
+     on:keydown={e => (e.key === 'Enter' || e.key === ' ') && onPlay()}>
     <div class="artwork">
         <ArtworkImage src={track.artworkUrl} seed={track.artist + track.title}/>
     </div>
     <div class="info">
         <div class="title">{track.title}</div>
         <div class="artist">
-            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events -->
-                <!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link"
-                                                                                on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>
-                {#if i < track.artists.length - 1}{' & '}{/if}
+            {#each track.artists as name, i}<button class="artist-link"
+                    on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</button>{#if i < track.artists.length - 1}{' & '}{/if}
             {/each}
         </div>
     </div>
-    {#if formatMs(track.durationMs)}
+    {#if track.durationMs > 0}
         <div class="duration">{formatMs(track.durationMs)}</div>
     {/if}
     <button class="add-btn" on:click|stopPropagation={() => $trackToAdd = track}>+</button>
@@ -93,6 +91,11 @@
     }
 
     .artist-link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
         cursor: pointer;
     }
 

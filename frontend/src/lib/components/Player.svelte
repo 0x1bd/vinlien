@@ -30,6 +30,37 @@
     let touchStartY = 0;
     let showTrackInfo = false;
 
+    let isDraggingProgress = false;
+    let dragProgress = 0;
+    let progressBarEl: HTMLElement;
+
+    $: displayProgress = isDraggingProgress ? dragProgress : $audioProgress;
+
+    function progressFromPointer(clientX: number): number {
+        if (!progressBarEl) return 0;
+        const rect = progressBarEl.getBoundingClientRect();
+        return Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    }
+
+    function handleProgressPointerDown(e: PointerEvent) {
+        e.stopPropagation();
+        if (!$currentTrack) return;
+        isDraggingProgress = true;
+        dragProgress = progressFromPointer(e.clientX);
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+
+    function handleProgressPointerMove(e: PointerEvent) {
+        if (!isDraggingProgress) return;
+        dragProgress = progressFromPointer(e.clientX);
+    }
+
+    function handleProgressPointerUp(e: PointerEvent) {
+        if (!isDraggingProgress) return;
+        isDraggingProgress = false;
+        audioManager.seek(dragProgress);
+    }
+
     function providerLabel(id: string): string {
         if (id.startsWith('lastfm:')) return 'Last.fm';
         if (id.startsWith('itunes:')) return 'iTunes';
@@ -40,11 +71,6 @@
 
     function togglePlay() {
         $isPlaying = !$isPlaying;
-    }
-
-    function handleSeek(e: MouseEvent) {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        audioManager.seek(((e.clientX - rect.left) / rect.width) * 100);
     }
 
     function handleTouchStart(e: TouchEvent) {
@@ -152,6 +178,15 @@
                             <div class="artist">
                                 {#each $currentTrack.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/artist/${encodeURIComponent(name)}`); }}>{name}</span>{#if i < $currentTrack.artists.length - 1}{' & '}{/if}{/each}
                             </div>
+                            {#if $currentTrack.albumTitle}
+                                <div class="album">
+                                    {#if $currentTrack.albumId}
+                                        <button class="album-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/album/${encodeURIComponent($currentTrack.albumId)}`); }}>{$currentTrack.albumTitle}</button>
+                                    {:else}
+                                        <span>{$currentTrack.albumTitle}</span>
+                                    {/if}
+                                </div>
+                            {/if}
                         </div>
                         <div class="actions">
                             <button class="action-btn action-like" class:liked={isLiked}
@@ -185,9 +220,16 @@
 
                 <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <!-- svelte-ignore a11y-interactive-supports-focus -->
-                <div class="progress-hitbox" on:click|stopPropagation={handleSeek} role="slider">
+                <div class="progress-hitbox"
+                     bind:this={progressBarEl}
+                     on:pointerdown={handleProgressPointerDown}
+                     on:pointermove={handleProgressPointerMove}
+                     on:pointerup={handleProgressPointerUp}
+                     on:pointercancel={handleProgressPointerUp}
+                     role="slider"
+                     class:dragging={isDraggingProgress}>
                     <div class="progress-bg">
-                        <div class="progress-bar" style="width: {$audioProgress}%">
+                        <div class="progress-bar" style="width: {displayProgress}%">
                             <div class="progress-thumb"></div>
                         </div>
                     </div>
@@ -440,6 +482,31 @@
         text-decoration: underline;
     }
 
+    .album {
+        font-size: 11px;
+        color: var(--text-secondary);
+        opacity: 0.7;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 1px;
+    }
+
+    .album-link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    .album-link:hover {
+        color: var(--text-primary);
+        opacity: 1;
+        text-decoration: underline;
+    }
+
     .actions {
         display: flex;
         align-items: center;
@@ -510,12 +577,18 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
 
-    .progress-hitbox:hover .progress-bar {
+    .progress-hitbox:hover .progress-bar,
+    .progress-hitbox.dragging .progress-bar {
         background: var(--accent-color);
     }
 
-    .progress-hitbox:hover .progress-thumb {
+    .progress-hitbox:hover .progress-thumb,
+    .progress-hitbox.dragging .progress-thumb {
         opacity: 1;
+    }
+
+    .progress-hitbox.dragging {
+        cursor: grabbing;
     }
 
     .transport-group {

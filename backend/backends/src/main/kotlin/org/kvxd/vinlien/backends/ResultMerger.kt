@@ -24,7 +24,9 @@ object TrackMerger {
             durationMs = group.firstOrNull { it.durationMs > 0 }?.durationMs ?: primary.durationMs,
             artist = mergedArtists.joinToString(", "),
             artists = mergedArtists,
-            lastFmUrl = group.mapNotNull { it.lastFmUrl }.firstOrNull() ?: primary.lastFmUrl
+            lastFmUrl = group.mapNotNull { it.lastFmUrl }.firstOrNull() ?: primary.lastFmUrl,
+            albumTitle = group.mapNotNull { it.albumTitle }.firstOrNull() ?: primary.albumTitle,
+            albumId = group.mapNotNull { it.albumId }.firstOrNull() ?: primary.albumId
         )
     }
 }
@@ -44,26 +46,48 @@ object AlbumMerger {
             albums.filter { it.title.normalized() == canonicalTitle.normalized() }
         } else albums
 
-        val base = (matching.ifEmpty { albums }).maxByOrNull { it.tracks.size } ?: albums.first()
+        val candidates = matching.ifEmpty { albums }
+
+        val originPrefix = when {
+            nativeId.startsWith("deezer:album:") -> "deezer:"
+            nativeId.startsWith("lastfm:album:") -> "lastfm:"
+            nativeId.startsWith("itunes:album:") -> "itunes:"
+            nativeId.startsWith("mb:album:") -> "mb:"
+            else -> null
+        }
+        val base = (if (originPrefix != null) candidates.firstOrNull { it.id.startsWith(originPrefix) } else null)
+            ?: candidates.maxByOrNull { it.tracks.distinctBy { t -> t.title.normalized() }.size }
+            ?: albums.first()
 
         val cleanArtist = canonicalArtist
-            ?: (matching.ifEmpty { albums }).minByOrNull { it.artist.length }?.artist
+            ?: candidates.minByOrNull { it.artist.length }?.artist
             ?: base.artist
 
-        val otherArtworkByTitle: Map<String, String> = albums
-            .filter { it !== base }
-            .flatMap { it.tracks }
+        val allTracks = albums.flatMap { it.tracks }
+
+        val durationByTitle: Map<String, Long> = allTracks
+            .filter { it.durationMs > 0 }
+            .associateBy({ it.title.normalized() }, { it.durationMs })
+
+        val artworkByTitle: Map<String, String> = allTracks
             .filter { it.artworkUrl != null }
             .associate { it.title.normalized() to it.artworkUrl!! }
 
         val albumArtwork = albums.mapNotNull { it.artworkUrl }.firstOrNull() ?: base.artworkUrl
 
-        val mergedTracks = base.tracks.map { track ->
-            when {
-                track.artworkUrl != null -> track
-                else -> track.copy(artworkUrl = otherArtworkByTitle[track.title.normalized()] ?: albumArtwork)
+        val resolvedTitle = canonicalTitle ?: base.title
+
+        val mergedTracks = base.tracks
+            .distinctBy { it.title.normalized() }
+            .map { track ->
+                val key = track.title.normalized()
+                track.copy(
+                    artworkUrl = track.artworkUrl ?: artworkByTitle[key] ?: albumArtwork,
+                    durationMs = if (track.durationMs > 0) track.durationMs else durationByTitle[key] ?: 0L,
+                    albumTitle = track.albumTitle ?: resolvedTitle,
+                    albumId = track.albumId ?: nativeId
+                )
             }
-        }
 
         return base.copy(
             id = nativeId,
@@ -86,6 +110,10 @@ object AlbumMerger {
         nativeId.startsWith("mb:album:") -> {
             val parts = nativeId.removePrefix("mb:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
+        }
+        nativeId.startsWith("deezer:album:") -> {
+            val parts = nativeId.removePrefix("deezer:album:").split(":::", limit = 3)
+            if (parts.size == 3) parts[1] to parts[2] else null
         }
         else -> null
     }

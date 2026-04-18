@@ -10,5 +10,6 @@ data class RadioRequest(
     val queue: List<Track>,
     val tracksPlayedInSession: Int = 0,
     val sessionArtists: List<String> = emptyList(),
-    val queueSize: Int = 10
+    val queueSize: Int = 10,
+    val noveltyBudget: Float? = null
 )

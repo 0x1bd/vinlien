@@ -45,7 +45,10 @@ private data class ItunesResult(
             artist = artist,
             durationMs = durationMs,
             artworkUrl = artworkUrl,
-            canonicalId = Normalizer.canonicalIdFor(artist, title)
+            canonicalId = Normalizer.canonicalIdFor(artist, title),
+            albumTitle = collectionName,
+            albumId = if (collectionId != null && collectionName != null)
+                "itunes:album:${collectionId}:::${artist}:::${collectionName}" else null
         )
     }
 

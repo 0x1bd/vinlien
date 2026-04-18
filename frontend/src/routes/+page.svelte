@@ -18,47 +18,23 @@
     onMount(async () => {
         try {
             feed = await apiRequest('/api/home/feed');
-        } catch (e) {
+        } catch (_) {
         }
 
         try {
             const trending: Track[] = await apiRequest('/api/home/trending');
             quickPicks = trending.sort(() => Math.random() - 0.5);
-        } catch (e) {
+        } catch (_) {
         }
 
         if (feed.recentlyPlayed.length > 0) {
             try {
-                const seenIds = new Set<string>();
-                const pool: Track[] = [];
-                for (const t of [...feed.listenAgain, ...feed.recentlyPlayed]) {
-                    if (!seenIds.has(t.id)) { seenIds.add(t.id); pool.push(t); }
-                }
-                for (let i = pool.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [pool[i], pool[j]] = [pool[j], pool[i]];
-                }
-                const seeds: Track[] = [];
-                const seenArtists = new Set<string>();
-                for (const t of pool) {
-                    const a = t.artist.toLowerCase().trim();
-                    if (!seenArtists.has(a)) { seenArtists.add(a); seeds.push(t); }
-                    if (seeds.length >= 4) break;
-                }
-                const [seedTrack, ...additionalSeeds] = seeds;
-                const radioRes: RadioResponse = await apiRequest('/api/radio', {
+                const result: RadioResponse = await apiRequest('/api/rec/home', {
                     method: 'POST',
-                    body: {
-                        seedTrack,
-                        additionalSeeds,
-                        queue: [],
-                        tracksPlayedInSession: 0,
-                        sessionArtists: [],
-                        queueSize: 4
-                    }
+                    body: {queueSize: 4, noveltyBudget: 0.65}
                 });
-                recs = radioRes.tracks;
-            } catch (e) {
+                recs = result.tracks;
+            } catch (_) {
             }
         }
     });
@@ -74,7 +50,7 @@
 {/if}
 
 {#if recs.length > 0}
-    <div class="header" style="margin-top: 48px;"><h2 class="page-title">Recommended For You</h2></div>
+    <div class="header" style="margin-top: 48px;"><h2 class="page-title">Picked For You</h2></div>
     <div class="grid">
         {#each recs as rec}
             <TrackCard track={rec.track} subtitle={rec.reason} onPlay={() => playTrack(rec.track)}/>

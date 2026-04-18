@@ -160,7 +160,10 @@
         handleResize();
         window.addEventListener('resize', handleResize);
         window.addEventListener('keydown', handleKeydown);
-        return () => window.removeEventListener('keydown', handleKeydown);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('keydown', handleKeydown);
+        };
     });
 </script>
 

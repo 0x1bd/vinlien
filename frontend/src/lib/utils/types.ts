@@ -8,6 +8,8 @@ export interface Track {
     artworkUrl?: string | null;
     canonicalId?: string | null;
     lastFmUrl?: string | null;
+    albumTitle?: string | null;
+    albumId?: string | null;
 }
 
 export interface Album {
@@ -97,4 +99,22 @@ export interface RecResult {
 export interface RadioResponse {
     tracks: RecResult[];
     seedTrack: Track;
+}
+
+declare global {
+    interface Window {
+        vinlienElectron?: {
+            updateMedia: (metadata: { title: string; artist: string; album?: string; artwork?: string | null }) => void;
+            updatePosition: (times: { position: number; duration: number }) => void;
+            updatePlayState?: (playing: boolean) => void;
+        };
+        vinlienControl?: {
+            play: () => void;
+            pause: () => void;
+            togglePlay: () => void;
+            next: () => void;
+            prev: () => void;
+            seekTo: (seconds: number) => void;
+        };
+    }
 }

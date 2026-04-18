@@ -1,6 +1,7 @@
 import {browser} from '$app/environment';
 import {writable} from 'svelte/store';
 import type {Playlist, Track} from '$lib/utils/types';
+import {buildStreamUrl} from '$lib/utils/stream';
 
 const OFFLINE_AUDIO_CACHE = 'vinlien-offline-audio-v1';
 const PLAYLIST_LINKS_KEY = 'vinlien-offline-links';
@@ -45,16 +46,6 @@ function removePlaylistLinks(playlistId: string): string[] {
     return removed.filter(id => !stillLinked.has(id));
 }
 
-function buildStreamUrl(track: Track): string {
-    const params = new URLSearchParams({
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        durationMs: String(track.durationMs)
-    });
-    if (track.streamUrl) params.set('streamUrl', track.streamUrl);
-    return `/api/stream?${params.toString()}`;
-}
 
 function cacheRequestForTrack(trackId: string): Request {
     if (!browser) {

@@ -43,7 +43,10 @@ private data class DzrTrack(
             artists = allArtists,
             durationMs = (duration ?: 0).toLong() * 1000L,
             artworkUrl = artworkUrl,
-            canonicalId = Normalizer.canonicalIdFor(artistName, title)
+            canonicalId = Normalizer.canonicalIdFor(artistName, title),
+            albumTitle = album?.title,
+            albumId = if (album?.id != null && album.title != null)
+                "deezer:album:${album.id}:::${artistName}:::${album.title}" else null
         )
     }
 }

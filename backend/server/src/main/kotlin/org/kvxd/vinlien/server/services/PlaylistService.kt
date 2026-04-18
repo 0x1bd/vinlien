@@ -50,6 +50,12 @@ object PlaylistService {
         return Playlist(newId, userId, name)
     }
 
+    suspend fun ownsPlaylist(userId: String, playlistId: String): Boolean = dbQuery {
+        Playlists.selectAll()
+            .where { (Playlists.id eq playlistId) and (Playlists.userId eq userId) }
+            .any()
+    }
+
     suspend fun updateInfo(playlistId: String, name: String, description: String?, imageUrl: String?) = dbQuery {
         Playlists.update({ Playlists.id eq playlistId }) {
             it[Playlists.name] = name

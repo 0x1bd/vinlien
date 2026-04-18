@@ -45,9 +45,14 @@ fun Route.streamRoutes(engine: AggregationEngine) {
 
         if (urlOrPath.startsWith("http")) {
             val rangeHeader = call.request.headers[HttpHeaders.Range] ?: "bytes=0-"
-            val upstream = proxyClient.get(urlOrPath) {
-                header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
-                header(HttpHeaders.Range, rangeHeader)
+            val upstream = runCatching {
+                proxyClient.get(urlOrPath) {
+                    header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
+                    header(HttpHeaders.Range, rangeHeader)
+                }
+            }.getOrElse {
+                logger.error("Upstream fetch failed for track '{}' ({}): {}", title, id, it.message)
+                return@get call.respond(HttpStatusCode.BadGateway)
             }
             val ct = upstream.contentType()?.toString() ?: "audio/mpeg"
             call.response.headers.append(HttpHeaders.AcceptRanges, "bytes")
@@ -58,7 +63,9 @@ fun Route.streamRoutes(engine: AggregationEngine) {
                 call.response.headers.append(HttpHeaders.ContentLength, it)
             }
             call.respondBytesWriter(contentType = ContentType.parse(ct), status = upstream.status) {
-                upstream.bodyAsChannel().copyTo(this)
+                runCatching { upstream.bodyAsChannel().copyTo(this) }.onFailure {
+                    logger.warn("Stream copy interrupted for track '{}' ({}): {}", title, id, it.message)
+                }
             }
         } else {
             val file = File(urlOrPath)

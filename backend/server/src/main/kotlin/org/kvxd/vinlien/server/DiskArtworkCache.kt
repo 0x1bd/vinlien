@@ -22,33 +22,28 @@ class DiskArtworkCache(
             val ctFile = File(dir, "$name.ct")
             if (!imgFile.exists() || !ctFile.exists()) return null
             if (System.currentTimeMillis() - imgFile.lastModified() > ttlMs) {
-                imgFile.delete()
-                ctFile.delete()
-                return null
+                imgFile.delete(); ctFile.delete(); return null
             }
             imgFile.readBytes() to ctFile.readText()
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 
     fun put(url: String, bytes: ByteArray, contentType: String) {
         try {
             evictIfNeeded(bytes.size.toLong())
             val name = urlToName(url)
-            File(dir, name).writeBytes(bytes)
-            File(dir, "$name.ct").writeText(contentType)
-        } catch (_: Exception) {
-
-        }
+            val tmp = File(dir, "$name.tmp")
+            tmp.writeBytes(bytes)
+            tmp.renameTo(File(dir, name))
+            File(dir, "$name.ct").writeText(contentType.substringBefore(";").trim())
+        } catch (_: Exception) {}
     }
 
-    fun clear() {
-        dir.listFiles()?.forEach { it.delete() }
-    }
+    fun clear() { dir.listFiles()?.forEach { it.delete() } }
 
+    @Synchronized
     private fun evictIfNeeded(incoming: Long) {
-        val imageFiles = dir.listFiles { f -> !f.name.endsWith(".ct") } ?: return
+        val imageFiles = dir.listFiles { f -> !f.name.endsWith(".ct") && !f.name.endsWith(".tmp") } ?: return
         var totalSize = imageFiles.sumOf { it.length() }
         if (totalSize + incoming <= maxBytes) return
         imageFiles.sortedBy { it.lastModified() }.forEach { f ->

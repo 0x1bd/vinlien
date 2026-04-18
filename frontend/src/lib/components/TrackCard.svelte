@@ -1,35 +1,36 @@
 <script lang="ts">
+    import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import type {Track} from '$lib/utils/types';
-    import {placeholderGradient, proxyArtwork} from '$lib/utils/artwork';
+    import ArtworkImage from './ArtworkImage.svelte';
+    import {enrichedArtworkByTrackId, enrichArtwork} from '$lib/utils/artworkEnrich';
 
     export let track: Track;
     export let onPlay: () => void;
     export let subtitle: string | undefined = undefined;
 
-    let imgError = false;
-    $: if (track) imgError = false;
+    $: artworkUrl = track.artworkUrl || $enrichedArtworkByTrackId[track.id] || null;
+
+    onMount(() => {
+        if (!track.artworkUrl || track.artworkUrl.includes('ytimg.com')) {
+            enrichArtwork(track).catch(() => {});
+        }
+    });
 </script>
 
-<!-- svelte-ignore a11y-click-events-have-key-events -->
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="track-card" on:click={onPlay}>
+<div class="track-card" role="button" tabindex="0"
+     on:click={onPlay}
+     on:keydown={e => (e.key === 'Enter' || e.key === ' ') && onPlay()}>
     <div class="img-wrapper">
-        {#if track.artworkUrl && !imgError}
-            <img src={proxyArtwork(track.artworkUrl)} alt="art" loading="lazy" on:error={() => imgError = true}>
-        {:else}
-            <div class="artwork-placeholder" style="background: {placeholderGradient(track.artist + track.title)}">
-                {track.title[0]?.toUpperCase() ?? '?'}
-            </div>
-        {/if}
+        <ArtworkImage src={artworkUrl} seed={track.artist + track.title}>
+            {track.title[0]?.toUpperCase() ?? '?'}
+        </ArtworkImage>
     </div>
     <div class="info">
         <div class="title">{track.title}</div>
         <div class="artist">
-            {#each track.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events -->
-                <!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link"
-                                                                                on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</span>
-                {#if i < track.artists.length - 1}{' & '}{/if}
+            {#each track.artists as name, i}<button class="artist-link"
+                    on:click|stopPropagation={() => goto(`/artist/${encodeURIComponent(name)}`)}>{name}</button>{#if i < track.artists.length - 1}{' & '}{/if}
             {/each}
         </div>
         {#if subtitle}
@@ -65,26 +66,12 @@
         margin-bottom: 16px;
     }
 
-    img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
+    .img-wrapper :global(.art-root) {
         border-radius: 6px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    }
-
-    .artwork-placeholder {
-        width: 100%;
-        height: 100%;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         font-size: 48px;
         font-weight: 800;
         color: rgba(255, 255, 255, 0.9);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     }
 
     .play-overlay {
@@ -129,6 +116,11 @@
     }
 
     .artist-link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
         cursor: pointer;
     }
 

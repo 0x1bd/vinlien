@@ -44,12 +44,9 @@
         </div>
 
         <button class="submit" on:click={submit}>{isRegistering ? 'Register' : 'Log In'}</button>
-        <!-- svelte-ignore a11y-click-events-have-key- -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <div class="toggle" on:click={() => isRegistering = !isRegistering}>
+        <button class="toggle" on:click={() => isRegistering = !isRegistering}>
             {isRegistering ? 'Already have an account? Log In' : 'Need an invite? Register'}
-        </div>
+        </button>
         {#if message}
             <div class="msg">{message}</div>
         {/if}
@@ -91,6 +88,9 @@
     }
 
     .toggle {
+        background: none;
+        border: none;
+        padding: 0;
         font-size: 14px;
         color: var(--text-secondary);
         cursor: pointer;

@@ -1,5 +1,6 @@
 export function proxyArtwork(url: string | null | undefined): string | undefined {
     if (!url) return undefined;
+    if (url.startsWith('https://')) return url;
     return `/api/artwork?url=${encodeURIComponent(url)}`;
 }
 

@@ -6,26 +6,35 @@
 
     $: proxiedSrc = proxyArtwork(src);
 
-    const LOAD_TIMEOUT_MS = 5000;
-
     let error = false;
     let loading = false;
     let loadedSrc: string | null = null;
-    let loadTimer: ReturnType<typeof setTimeout> | null = null;
+    let imgKey = 0;
+    let retried = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    function clearLoadTimer() {
-        if (loadTimer !== null) {
-            clearTimeout(loadTimer);
-            loadTimer = null;
-        }
+    function clearRetryTimer() {
+        if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
     }
 
-    function onImageSettled(success: boolean) {
-        clearLoadTimer();
+    function onLoad() {
+        clearRetryTimer();
         loading = false;
-        if (success) {
-            loadedSrc = proxiedSrc ?? null;
+        error = false;
+        loadedSrc = proxiedSrc ?? null;
+    }
+
+    function onError() {
+        if (!retried && proxiedSrc) {
+            retried = true;
+            retryTimer = setTimeout(() => {
+                error = false;
+                loading = true;
+                imgKey++;
+            }, 3000);
         } else {
+            clearRetryTimer();
+            loading = false;
             error = true;
             loadedSrc = null;
         }
@@ -34,14 +43,11 @@
     $: {
         const next = proxiedSrc ?? null;
         if (next !== loadedSrc) {
+            clearRetryTimer();
             error = false;
-            clearLoadTimer();
+            retried = false;
             loading = !!next;
-            if (!next) {
-                loadedSrc = null;
-            } else {
-                loadTimer = setTimeout(() => onImageSettled(false), LOAD_TIMEOUT_MS);
-            }
+            if (!next) loadedSrc = null;
         }
     }
 </script>
@@ -51,10 +57,12 @@
         {#if loading}
             <div class="art-spinner"></div>
         {/if}
-        <img src={proxiedSrc} alt=""
-             style:visibility={loading ? 'hidden' : 'visible'}
-             on:load={() => onImageSettled(true)}
-             on:error={() => onImageSettled(false)}>
+        {#key imgKey}
+            <img src={proxiedSrc} alt=""
+                 style:visibility={loading ? 'hidden' : 'visible'}
+                 on:load={onLoad}
+                 on:error={onError}>
+        {/key}
     {:else}
         <div class="art-placeholder" style="background: {placeholderGradient(seed)}">
             <slot/>
