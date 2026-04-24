@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {browser} from '$app/environment';
     import {
         currentTrack,
         isPlaying,
@@ -13,6 +14,7 @@
         requireOnline
     } from '$lib/utils/store';
     import {get} from 'svelte/store';
+    import {onMount, tick} from 'svelte';
     import {downloadTrack} from '$lib/utils/offlineAudio';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
@@ -33,8 +35,41 @@
     let isDraggingProgress = false;
     let dragProgress = 0;
     let progressBarEl: HTMLElement;
+    let mobileTitleViewportEl: HTMLDivElement;
+    let mobileTitleTextEl: HTMLSpanElement;
+    let isMobileTitleOverflowing = false;
+    let mobileTitleShiftPx = 0;
+    let mobileTitleDurationSec = 8;
+    const marqueeGapPx = 26;
 
     $: displayProgress = isDraggingProgress ? dragProgress : $audioProgress;
+
+    function updateMobileOverflowState() {
+        if (!browser || !$currentTrack) return;
+        if (isMobileExpanded) {
+            isMobileTitleOverflowing = false;
+            mobileTitleShiftPx = 0;
+            return;
+        }
+        const titleViewportWidth = mobileTitleViewportEl?.clientWidth ?? 0;
+        const titleTextWidth = mobileTitleTextEl?.scrollWidth ?? 0;
+        isMobileTitleOverflowing = titleTextWidth - titleViewportWidth > 4;
+        mobileTitleShiftPx = isMobileTitleOverflowing ? titleTextWidth + marqueeGapPx : 0;
+        mobileTitleDurationSec = Math.max(7, mobileTitleShiftPx / 28);
+    }
+
+    onMount(() => {
+        const onResize = () => updateMobileOverflowState();
+        window.addEventListener('resize', onResize);
+        void tick().then(updateMobileOverflowState);
+        return () => window.removeEventListener('resize', onResize);
+    });
+
+    $: if (browser) {
+        $currentTrack;
+        isMobileExpanded;
+        void tick().then(updateMobileOverflowState);
+    }
 
     function progressFromPointer(clientX: number): number {
         if (!progressBarEl) return 0;
@@ -174,9 +209,23 @@
                     </div>
                     <div class="data-row">
                         <div class="metadata">
-                            <div class="title">{$currentTrack.title}</div>
+                            <div class="title">
+                                <div class="mobile-marquee-viewport" bind:this={mobileTitleViewportEl}>
+                                    <div class="mobile-marquee-track"
+                                        class:overflowing={isMobileTitleOverflowing}
+                                         style={`--marquee-shift: ${mobileTitleShiftPx}px; --marquee-duration: ${mobileTitleDurationSec}s;`}>
+                                        <span class="mobile-marquee-copy" bind:this={mobileTitleTextEl}>{$currentTrack.title}</span>
+                                        <span class="mobile-marquee-sep" aria-hidden={!isMobileTitleOverflowing}>•</span>
+                                        <span class="mobile-marquee-copy mobile-marquee-copy-clone" aria-hidden={!isMobileTitleOverflowing}>{$currentTrack.title}</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="artist">
-                                {#each $currentTrack.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/artist/${encodeURIComponent(name)}`); }}>{name}</span>{#if i < $currentTrack.artists.length - 1}{' & '}{/if}{/each}
+                                {#if $currentTrack.artists.length > 0}
+                                    {#each $currentTrack.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/artist/${encodeURIComponent(name)}`); }}>{name}</span>{#if i < $currentTrack.artists.length - 1}{' & '}{/if}{/each}
+                                {:else}
+                                    <span>{$currentTrack.artist}</span>
+                                {/if}
                             </div>
                             {#if $currentTrack.albumTitle}
                                 <div class="album">
@@ -507,6 +556,45 @@
         text-decoration: underline;
     }
 
+    .mobile-marquee-viewport {
+        min-width: 0;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .mobile-marquee-track {
+        min-width: 0;
+        width: 100%;
+        white-space: nowrap;
+    }
+
+    .mobile-marquee-track.overflowing {
+        display: inline-flex;
+        align-items: center;
+        width: max-content;
+        max-width: none;
+        animation: marqueeLoop var(--marquee-duration) linear infinite;
+        will-change: transform;
+    }
+
+    .mobile-marquee-track:not(.overflowing) .mobile-marquee-sep,
+    .mobile-marquee-track:not(.overflowing) .mobile-marquee-copy-clone {
+        display: none;
+    }
+
+    .mobile-marquee-sep {
+        display: none;
+        width: 26px;
+        text-align: center;
+        opacity: 0.6;
+    }
+
+    .mobile-marquee-track.overflowing .mobile-marquee-sep {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .actions {
         display: flex;
         align-items: center;
@@ -749,6 +837,15 @@
         display: none;
     }
 
+    @keyframes marqueeLoop {
+        0% {
+            transform: translateX(0);
+        }
+        100% {
+            transform: translateX(calc(-1 * var(--marquee-shift)));
+        }
+    }
+
     @media (min-width: 601px) and (max-width: 1060px) {
         .time-display {
             display: none;
@@ -793,7 +890,7 @@
 
         .player-bar {
             height: 60px;
-            padding: 0 8px;
+            padding: 0 12px;
         }
 
         .player-wrapper:not(.expanded) .idle-text {
@@ -819,13 +916,14 @@
         .player-wrapper:not(.expanded) .controls-area {
             flex-direction: row;
             flex-wrap: nowrap;
-            gap: 4px;
+            gap: 8px;
         }
 
         .player-wrapper:not(.expanded) .data-group {
             width: auto;
             flex: 1;
-            gap: 8px;
+            gap: 10px;
+            min-width: 0;
         }
 
         .player-wrapper:not(.expanded) .data-group .artwork {
@@ -836,14 +934,24 @@
         .player-wrapper:not(.expanded) .metadata {
             flex: 1;
             overflow: hidden;
+            min-width: 0;
         }
 
         .player-wrapper:not(.expanded) .metadata .title {
             font-size: 13px;
+            line-height: 1.2;
         }
 
         .player-wrapper:not(.expanded) .metadata .artist {
             font-size: 11px;
+        }
+
+        .player-wrapper:not(.expanded) .metadata {
+            gap: 2px;
+        }
+
+        .player-wrapper:not(.expanded) .metadata .album {
+            display: none;
         }
 
         .player-wrapper:not(.expanded) .actions .action-add {
@@ -861,7 +969,7 @@
 
         .player-wrapper:not(.expanded) .transport-group {
             width: auto;
-            gap: 4px;
+            gap: 6px;
             justify-content: flex-end;
             align-items: center;
         }
@@ -960,15 +1068,36 @@
             width: 100%;
         }
 
+        .player-wrapper.expanded .metadata {
+            gap: 6px;
+        }
+
         .player-wrapper.expanded .metadata .title {
             font-size: 24px;
             font-weight: 800;
-            margin-bottom: 4px;
+            line-height: 1.1;
+            margin-bottom: 0;
             white-space: normal;
         }
 
         .player-wrapper.expanded .metadata .artist {
             font-size: 16px;
+            line-height: 1.3;
+        }
+
+        .player-wrapper.expanded .metadata .album {
+            font-size: 14px;
+            line-height: 1.35;
+            color: var(--text-primary);
+            opacity: 0.82;
+            margin-top: 0;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+        }
+
+        .player-wrapper.expanded .metadata .album-link {
+            color: inherit;
         }
 
         .player-wrapper.expanded .actions {
