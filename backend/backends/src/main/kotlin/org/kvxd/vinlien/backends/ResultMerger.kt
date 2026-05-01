@@ -14,7 +14,6 @@ object TrackMerger {
     fun merge(tracks: List<Track>): List<Track> =
         tracks.groupBy { it.fingerprint() }
             .map { (_, group) -> mergeGroup(group) }
-            .sortedByDescending { if (it.artworkUrl != null) 1 else 0 }
 
     private fun mergeGroup(group: List<Track>): Track {
         val primary = group.maxByOrNull { it.artists.size } ?: group.first()
@@ -99,6 +98,10 @@ object AlbumMerger {
     }
 
     private fun parseNativeId(nativeId: String): Pair<String, String>? = when {
+        nativeId.startsWith("merged:album:") -> {
+            val parts = nativeId.removePrefix("merged:album:").split(":::", limit = 2)
+            if (parts.size == 2) parts[0] to parts[1] else null
+        }
         nativeId.startsWith("lastfm:album:") -> {
             val parts = nativeId.removePrefix("lastfm:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null

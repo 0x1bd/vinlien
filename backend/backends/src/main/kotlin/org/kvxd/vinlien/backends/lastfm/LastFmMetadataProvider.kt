@@ -303,6 +303,9 @@ class LastFmMetadataProvider(
                     is JsonPrimitive -> a.content
                     else -> artist
                 }
+                if (!artistName.equals(artist, ignoreCase = true) && !artistName.contains(artist, ignoreCase = true)) {
+                    return@mapNotNull null
+                }
                 val artworkUrl = item.image.lastOrNull()?.text
                     ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
                 Album(

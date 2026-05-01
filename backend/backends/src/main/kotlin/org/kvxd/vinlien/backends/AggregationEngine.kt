@@ -104,26 +104,43 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         return AlbumMerger.mergeOne(results, nativeId)?.let { Normalizer.normalizeAlbum(it) }
     }
 
+    suspend fun getAlbum(artist: String, title: String): Album? {
+        val results = parallelQuery<Album>(Capability.ALBUM_TRACKS) { it.getAlbum(artist, title) }
+        val dummyId = "merged:album:$artist:::$title"
+        val merged = AlbumMerger.mergeOne(results, dummyId)?.let { Normalizer.normalizeAlbum(it) }
+
+        if (merged != null && merged.tracks.isEmpty()) {
+            val query = "$artist $title"
+            val fallbackTracks = searchTracks(query)
+                .filter {
+                    val candidateTitle = it.albumTitle ?: it.title
+                    candidateTitle.contains(title, ignoreCase = true) || fuzzyMatch(it, Track(id="", title=title, artist=artist, durationMs=0))
+                }
+            if (fallbackTracks.isNotEmpty()) {
+                return merged.copy(tracks = fallbackTracks)
+            }
+        }
+        return merged
+    }
+
     suspend fun getArtistAlbums(artist: String): List<Album> {
         val raw = parallelQuery<List<Album>>(Capability.ARTIST_ALBUMS) { it.getArtistAlbums(artist) }.flatten()
-        return deduplicateAlbumVariants(AlbumMerger.dedup(raw.map { Normalizer.normalizeAlbum(it) }))
+        val dedup = AlbumMerger.dedup(raw.map { Normalizer.normalizeAlbum(it) })
+        return deduplicateAlbumVariants(dedup)
     }
 
     private fun deduplicateAlbumVariants(albums: List<Album>): List<Album> {
         if (albums.size <= 1) return albums
-        val rawKeys = albums.map { it.title.lowercase().replace(Regex("[^a-z0-9]"), "") }
         val normKeys = albums.map { albumNormKey(it.title) }
         val dominated = BooleanArray(albums.size)
         for (i in albums.indices) {
             if (dominated[i]) continue
             for (j in albums.indices) {
                 if (i == j || dominated[j]) continue
-                val ri = rawKeys[i]; val rj = rawKeys[j]
                 val ni = normKeys[i]; val nj = normKeys[j]
-                val jSupersetOfI = rj.startsWith(ri) && rj.length > ri.length
                 val sameNormNoYear = ni == nj && albums[i].year == null && albums[j].year != null
-                val sameNormBothYear = ni == nj && ni != ri && albums[i].year != null && albums[j].year != null && i > j
-                if (jSupersetOfI || sameNormNoYear || sameNormBothYear) {
+                val sameNormBothYear = ni == nj && albums[i].year != null && albums[j].year != null && i > j
+                if (sameNormNoYear || sameNormBothYear) {
                     dominated[i] = true
                     break
                 }
@@ -228,6 +245,10 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         streamResolver.resolve(track, preferredProviderId)
 
     fun parseAlbumArtistTitle(nativeId: String): Pair<String, String>? = when {
+        nativeId.startsWith("merged:album:") -> {
+            val parts = nativeId.removePrefix("merged:album:").split(":::", limit = 2)
+            if (parts.size == 2) parts[0] to parts[1] else null
+        }
         nativeId.startsWith("lastfm:album:") -> {
             val parts = nativeId.removePrefix("lastfm:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
@@ -273,4 +294,5 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
 
         return titlesMatch && (artistsMatch || artistNameAppearsInTitle)
     }
+
 }

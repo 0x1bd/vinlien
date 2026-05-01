@@ -77,10 +77,10 @@ private data class DzrAlbumSummary(
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("record_type") val recordType: String? = null
 ) {
-    fun toDomainAlbum(): Album? {
+    fun toDomainAlbum(fallbackArtistName: String? = null): Album? {
         val albumId = id ?: return null
         val title = title ?: return null
-        val artistName = artist?.name ?: return null
+        val artistName = artist?.name ?: fallbackArtistName ?: return null
         val artworkUrl = (coverXl ?: coverBig).validDeezerImage()
         val year = releaseDate?.take(4)?.toIntOrNull()
         return Album(
@@ -236,12 +236,18 @@ class DeezerMetadataProvider : MusicProvider {
         try {
             val artistId = findArtistId(artist) ?: return@withContext emptyList()
             val res = fetchParsed<DzrListResponse<DzrAlbumSummary>>(
-                apiUrl("artist/$artistId/albums", "limit" to "50"),
+                apiUrl("artist/$artistId/albums", "limit" to "100"),
                 "ARTIST_ALBUMS"
             )
-            val albums = res.data
-                .filter { it.recordType == null || it.recordType in setOf("album", "ep") }
-                .mapNotNull { it.toDomainAlbum() }
+
+            val resolvedArtistName = try {
+                val full = fetchParsed<DzrArtistFull>(apiUrl("artist/$artistId"), "ARTIST_ALBUMS")
+                full.name ?: artist
+            } catch (_: Throwable) {
+                artist
+            }
+
+            val albums = res.data.mapNotNull { it.toDomainAlbum(resolvedArtistName) }
             BackendDebugger.logResponse(id, "ARTIST_ALBUMS", albums.size, "")
             albums
         } catch (e: Exception) {

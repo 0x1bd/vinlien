@@ -24,6 +24,22 @@ object PlaylistService {
                 )
             }.toMutableMap()
 
+        val duplicatesToRemove = mutableListOf<String>()
+        userPlaylists.values.groupBy { it.name }
+            .filter { (name, list) -> (name == "Liked Songs" || name == "Disliked Songs") && list.size > 1 }
+            .forEach { (_, list) ->
+                val toRemove = list.drop(1)
+                toRemove.forEach {
+                    duplicatesToRemove.add(it.id)
+                    userPlaylists.remove(it.id)
+                }
+            }
+
+        if (duplicatesToRemove.isNotEmpty()) {
+            PlaylistTracks.deleteWhere { PlaylistTracks.playlistId inList duplicatesToRemove }
+            Playlists.deleteWhere { Playlists.id inList duplicatesToRemove }
+        }
+
         ensureSystemPlaylist(userId, "Liked Songs", userPlaylists)
         ensureSystemPlaylist(userId, "Disliked Songs", userPlaylists)
 

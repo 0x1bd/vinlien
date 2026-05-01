@@ -229,8 +229,8 @@
                             </div>
                             {#if $currentTrack.albumTitle}
                                 <div class="album">
-                                    {#if $currentTrack.albumId}
-                                        <button class="album-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/album/${encodeURIComponent($currentTrack.albumId)}`); }}>{$currentTrack.albumTitle}</button>
+                                    {#if $currentTrack.albumTitle}
+                                        <button class="album-link" on:click|stopPropagation={() => { isMobileExpanded = false; goto(`/album/${encodeURIComponent($currentTrack.artist)}/${encodeURIComponent($currentTrack.albumTitle)}`); }}>{$currentTrack.albumTitle}</button>
                                     {:else}
                                         <span>{$currentTrack.albumTitle}</span>
                                     {/if}

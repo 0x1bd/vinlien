@@ -57,4 +57,18 @@ fun Route.catalogRoutes(engine: AggregationEngine) {
             call.respond(HttpStatusCode.NotFound)
         }
     }
+
+    get("/api/album/{artist}/{title}") {
+        val artist = call.parameters["artist"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        val title = call.parameters["title"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        val cacheKey = "album:$artist:$title"
+        CacheManager.albumDetail.get(cacheKey)?.let { call.respond(it); return@get }
+        val album = engine.getAlbum(artist, title)
+        if (album != null) {
+            CacheManager.albumDetail.put(cacheKey, album)
+            call.respond(album)
+        } else {
+            call.respond(HttpStatusCode.NotFound)
+        }
+    }
 }

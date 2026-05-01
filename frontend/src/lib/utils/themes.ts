@@ -1,4 +1,4 @@
-export type ThemeId = 'dark' | 'amoled' | 'nord' | 'light' | 'pastel';
+export type ThemeId = 'dark' | 'amoled' | 'nord' | 'light' | 'pastel' | 'dark-pastel';
 
 export interface Theme {
     id: ThemeId;
@@ -105,6 +105,26 @@ export const themes: Record<ThemeId, Theme> = {
             '--range-track': '#c0c0c0',
             '--scrollbar-thumb': 'rgba(0,0,0,0.15)',
             '--scrollbar-thumb-hover': 'rgba(0,0,0,0.25)',
+        },
+    },
+    'dark-pastel': {
+        id: 'dark-pastel',
+        name: 'Dark Pastel',
+        vars: {
+            '--bg-base': '#161318',
+            '--bg-surface': '#201b24',
+            '--bg-elevated': '#2d2533',
+            '--bg-hover': '#382f3f',
+            '--bg-sidebar': '#110f13',
+            '--text-primary': '#f4e9f2',
+            '--text-secondary': '#bba8bc',
+            '--accent-color': '#c074cc',
+            '--danger-color': '#e0667b',
+            '--success-color': '#66b280',
+            '--border-subtle': '#352c3c',
+            '--range-track': '#4a3d54',
+            '--scrollbar-thumb': 'rgba(192,116,204,0.15)',
+            '--scrollbar-thumb-hover': 'rgba(192,116,204,0.25)',
         },
     },
 };
