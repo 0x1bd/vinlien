@@ -1,5 +1,14 @@
 <script lang="ts">
-    import {queue, currentTrackIndex, showQueuePanel, userPlaylists, similarTracks, isFetchingSimilar} from '$lib/utils/store';
+    import {
+        queue,
+        currentTrackIndex,
+        showQueuePanel,
+        userPlaylists,
+        similarTracks,
+        isFetchingSimilar,
+        currentTrack,
+        fetchSimilarTracksIfNeeded
+    } from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import TrackRow from './TrackRow.svelte';
@@ -18,6 +27,10 @@
 
     $: if (!showSimilarTab && activeTab === 'similar') {
         activeTab = 'queue';
+    }
+
+    $: if (activeTab === 'similar' && $currentTrack && (inline || $showQueuePanel)) {
+        fetchSimilarTracksIfNeeded($currentTrack);
     }
 
     function handleTouchStart(e: TouchEvent) {
@@ -138,7 +151,6 @@
             {:else}
                 {#each $similarTracks as track}
                     <div class="queue-item">
-                        <!-- Instantly appends the similar track and begins playing it -->
                         <TrackRow {track} onPlay={() => playSimilar(track)}/>
                     </div>
                 {/each}

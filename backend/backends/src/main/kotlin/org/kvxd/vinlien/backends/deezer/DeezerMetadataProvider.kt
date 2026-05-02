@@ -28,7 +28,8 @@ private data class DzrTrack(
     val duration: Int? = null,
     val artist: DzrArtistRef? = null,
     val album: DzrAlbumRef? = null,
-    val contributors: List<DzrArtistRef> = emptyList()
+    val contributors: List<DzrArtistRef> = emptyList(),
+    val rank: Long? = null
 ) {
     fun toDomainTrack(): Track? {
         val trackId = id ?: return null
@@ -46,7 +47,8 @@ private data class DzrTrack(
             canonicalId = Normalizer.canonicalIdFor(artistName, title),
             albumTitle = album?.title,
             albumId = if (album?.id != null && album.title != null)
-                "deezer:album:${album.id}:::${artistName}:::${album.title}" else null
+                "deezer:album:${album.id}:::${artistName}:::${album.title}" else null,
+            popularityScore = rank?.toDouble()
         )
     }
 }

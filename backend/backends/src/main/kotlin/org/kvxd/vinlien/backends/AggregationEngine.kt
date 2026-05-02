@@ -6,6 +6,7 @@ import org.kvxd.vinlien.shared.models.media.Album
 import org.kvxd.vinlien.shared.models.media.ArtistInfo
 import org.kvxd.vinlien.shared.models.media.SearchResponse
 import org.kvxd.vinlien.shared.models.media.Track
+import kotlin.math.ln
 
 private val VERSION_WORDS = setOf(
     "acoustic", "live", "instrumental", "karaoke", "cover", "demo", "unplugged", "remix"
@@ -46,6 +47,7 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
             .runningFold(emptyList()) { acc, batch ->
                 TrackMerger.merge(acc + batch.map { Normalizer.normalizeTrack(it) })
                     .filter { it.artworkUrl != null }
+                    .sortForSearch(query)
             }
 
         val albumUpdates: Flow<List<Album>> = providerFlow(Capability.ALBUM_SEARCH) { it.searchAlbums(query) }
@@ -90,7 +92,7 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
 
     suspend fun searchTracks(query: String): List<Track> {
         val raw = parallelQuery(Capability.TRACK_SEARCH) { it.searchTracks(query) }.flatten()
-        return TrackMerger.merge(raw.map { Normalizer.normalizeTrack(it) })
+        return TrackMerger.merge(raw.map { Normalizer.normalizeTrack(it) }).sortForSearch(query)
     }
 
     suspend fun searchAlbums(query: String): List<Album> {
@@ -203,6 +205,64 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
                 (if (hasLastFmMetadata) RecommendationSignalWeights.HAS_LAST_FM_METADATA else 0) +
                 (if (isFromNonYoutubeProvider) RecommendationSignalWeights.FROM_NON_YOUTUBE_PROVIDER else 0) +
                 (if (hasDuration) RecommendationSignalWeights.HAS_DURATION else 0)
+    }
+
+    private fun List<Track>.sortForSearch(query: String): List<Track> {
+        val queryTokens = query.normalized().split(" ").filter { it.length >= 2 }
+        if (queryTokens.isEmpty()) return sortedByDescending { it.popularityScore ?: 0.0 }
+
+        val queryNorm = query.normalized()
+        val queryCompact = queryNorm.withoutSpaces()
+
+        return sortedWith(
+            compareByDescending<Track> { searchRelevanceScore(it, queryTokens, queryNorm, queryCompact) }
+                .thenByDescending { normalizedPopularity(it) }
+                .thenByDescending { metadataQualityScore(it) }
+                .thenBy { it.title.length }
+        )
+    }
+
+    private fun searchRelevanceScore(
+        track: Track,
+        queryTokens: List<String>,
+        queryNorm: String,
+        queryCompact: String
+    ): Double {
+        val title = track.title.normalized()
+        val artist = track.artist.normalized()
+        val titleCompact = title.withoutSpaces()
+        val artistCompact = artist.withoutSpaces()
+        val haystack = "$title $artist"
+        val allTokensMatch = queryTokens.all { haystack.contains(it) }
+        val compactTokensMatch = queryTokens.all { token ->
+            val compactToken = token.withoutSpaces()
+            titleCompact.contains(compactToken) || artistCompact.contains(compactToken)
+        }
+        val titleContainsQuery = title.contains(queryNorm) || titleCompact.contains(queryCompact)
+        val artistContainsQuery = artist.contains(queryNorm) || artistCompact.contains(queryCompact)
+        val exactArtistQuery = artist == queryNorm || artistCompact == queryCompact
+        val exactTitleQuery = title == queryNorm || titleCompact == queryCompact
+
+        return (if (exactArtistQuery) 95.0 else 0.0) +
+                (if (artistContainsQuery) 42.0 else 0.0) +
+                (if (allTokensMatch || compactTokensMatch) 60.0 else 0.0) +
+                queryTokens.count { title.contains(it) } * 8.0 +
+                queryTokens.count { artist.contains(it) } * 5.0 +
+                queryTokens.count { artistCompact.contains(it.withoutSpaces()) } * 7.0 +
+                if (titleContainsQuery) 18.0 else 0.0 +
+                if (exactTitleQuery) 12.0 else 0.0
+    }
+
+    private fun normalizedPopularity(track: Track): Double {
+        val raw = track.popularityScore ?: return 0.0
+        return ln(1.0 + raw.coerceAtLeast(0.0))
+    }
+
+    private fun metadataQualityScore(track: Track): Int {
+        val artworkUrl = track.artworkUrl
+        return (if (artworkUrl != null && !artworkUrl.contains("ytimg.com")) 4 else 0) +
+                (if (track.durationMs > 0) 2 else 0) +
+                (if (track.lastFmUrl != null) 1 else 0)
     }
 
     suspend fun enrichArtwork(title: String, artist: String): String? {

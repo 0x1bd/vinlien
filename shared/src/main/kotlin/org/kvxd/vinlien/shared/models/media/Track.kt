@@ -14,5 +14,6 @@ data class Track(
     val canonicalId: String? = null,
     val lastFmUrl: String? = null,
     val albumTitle: String? = null,
-    val albumId: String? = null
+    val albumId: String? = null,
+    val popularityScore: Double? = null
 )

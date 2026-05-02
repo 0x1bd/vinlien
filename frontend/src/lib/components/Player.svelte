@@ -22,6 +22,7 @@
     import {audioManager, audioProgress, currentTimeDisplay, durationDisplay} from '$lib/utils/AudioManager';
     import QueuePanel from './QueuePanel.svelte';
     import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
     import ArtworkImage from './ArtworkImage.svelte';
     import DesktopExpandedPlayer from './DesktopExpandedPlayer.svelte';
 
@@ -43,6 +44,7 @@
     let isMobileTitleOverflowing = false;
     let mobileTitleShiftPx = 0;
     let mobileTitleDurationSec = 8;
+    let lastPathname = '';
     const marqueeGapPx = 26;
 
     $: displayProgress = isDraggingProgress ? dragProgress : $audioProgress;
@@ -76,6 +78,14 @@
 
     $: if (!$currentTrack && isExpanded) {
         isExpanded = false;
+    }
+
+    $: if (browser) {
+        const pathname = $page.url.pathname;
+        if (lastPathname && pathname !== lastPathname && isExpanded) {
+            isExpanded = false;
+        }
+        lastPathname = pathname;
     }
 
     $: if (isExpanded && $currentTrack) {
@@ -285,7 +295,7 @@
                                     </svg>
                                 </button>
                                 <button class="action-btn action-add"
-                                        on:click|stopPropagation={() => { isExpanded = false; $trackToAdd = $currentTrack; }}
+                                        on:click|stopPropagation={() => { $trackToAdd = $currentTrack; }}
                                         title="Add to Playlist">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                          stroke-width="2">

@@ -83,7 +83,8 @@ private data class LfmTrack(
             durationMs = durationSec * 1000L,
             artworkUrl = artworkUrl,
             canonicalId = Normalizer.canonicalIdFor(resolvedArtist, title),
-            lastFmUrl = url
+            lastFmUrl = url,
+            popularityScore = listeners?.toDoubleOrNull()
         )
     }
 

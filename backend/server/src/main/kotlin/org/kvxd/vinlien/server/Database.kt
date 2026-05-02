@@ -68,6 +68,37 @@ object SkipEvents : Table("vl_skip_events") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object PlayEvents : Table("vl_play_events") {
+    val id = integer("id").autoIncrement()
+    val userId = varchar("user_id", 36).references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val trackId = varchar("track_id", 100).references(Tracks.id, onDelete = ReferenceOption.CASCADE)
+    val eventType = varchar("event_type", 32)
+    val eventSource = varchar("source", 32).nullable()
+    val sessionId = varchar("session_id", 64).nullable()
+    val playedMs = long("played_ms").default(0L)
+    val durationMs = long("duration_ms").default(0L)
+    val wasManual = bool("was_manual").default(false)
+    val timestamp = long("timestamp")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object TrackFeatures : Table("vl_track_features") {
+    val trackId = varchar("track_id", 100).references(Tracks.id, onDelete = ReferenceOption.CASCADE)
+    val features = text("features")
+    val updatedAt = long("updated_at")
+    override val primaryKey = PrimaryKey(trackId)
+}
+
+object TasteCapsules : Table("vl_taste_capsules") {
+    val userId = varchar("user_id", 36).references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val capsuleKey = varchar("capsule_key", 40)
+    val label = varchar("label", 120)
+    val features = text("features")
+    val weight = double("weight")
+    val updatedAt = long("updated_at")
+    override val primaryKey = PrimaryKey(userId, capsuleKey)
+}
+
 object DatabaseFactory {
     fun init() {
         val config = HikariConfig().apply {
@@ -83,7 +114,17 @@ object DatabaseFactory {
         Database.connect(dataSource)
 
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(Users, Tracks, Playlists, PlaylistTracks, History, SkipEvents)
+            SchemaUtils.createMissingTablesAndColumns(
+                Users,
+                Tracks,
+                Playlists,
+                PlaylistTracks,
+                History,
+                SkipEvents,
+                PlayEvents,
+                TrackFeatures,
+                TasteCapsules
+            )
 
             if (Users.selectAll().where { Users.username eq "admin" }.empty()) {
                 Users.insert {

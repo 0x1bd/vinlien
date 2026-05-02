@@ -128,6 +128,7 @@ class AudioManager {
                 durationDisplay.set("0:00");
 
                 apiRequest('/api/history', {method: 'POST', body: track}).catch(() => {});
+                this.reportPlaybackEvent(track, 'started', 0, false).catch(() => {});
 
                 this.loadTrack(track);
 
@@ -223,6 +224,39 @@ class AudioManager {
         }
     }
 
+    private currentPlayedMs(): number {
+        if (this.audio.currentTime && Number.isFinite(this.audio.currentTime)) {
+            return Math.max(0, Math.round(this.audio.currentTime * 1000));
+        }
+        return this.trackStartTimeMs > 0 ? Math.max(0, Date.now() - this.trackStartTimeMs) : 0;
+    }
+
+    private currentDurationMs(track: Track): number {
+        if (this.audio.duration && Number.isFinite(this.audio.duration)) {
+            return Math.max(0, Math.round(this.audio.duration * 1000));
+        }
+        return track.durationMs || 0;
+    }
+
+    private async reportPlaybackEvent(
+        track: Track,
+        eventType: 'started' | 'completed' | 'advanced' | 'skip_requested',
+        playedMs = this.currentPlayedMs(),
+        wasManual = false
+    ): Promise<void> {
+        await apiRequest('/api/rec/play-event', {
+            method: 'POST',
+            body: {
+                track,
+                eventType,
+                playedMs,
+                durationMs: this.currentDurationMs(track),
+                source: get(useRecommendations) ? 'radio' : 'manual',
+                wasManual
+            }
+        });
+    }
+
     private async populateRecommendationsIfNeeded(): Promise<void> {
         if (this.isFetchingRec || !get(useRecommendations)) return;
 
@@ -294,11 +328,16 @@ class AudioManager {
         const q = get(queue);
         const rm = get(repeatMode);
         const idx = get(currentTrackIndex);
+        const track = q[idx];
 
-        if (force && this.trackStartTimeMs > 0) {
-            const track = q[idx];
-            if (track) {
-                const playedMs = Date.now() - this.trackStartTimeMs;
+        if (track && this.trackStartTimeMs > 0) {
+            const playedMs = this.currentPlayedMs();
+            const durationMs = this.currentDurationMs(track);
+            const completion = durationMs > 0 ? playedMs / durationMs : 0;
+            const eventType = force ? 'skip_requested' : (completion >= 0.8 ? 'completed' : 'advanced');
+            this.reportPlaybackEvent(track, eventType, playedMs, force).catch(() => {});
+
+            if (force) {
                 apiRequest('/api/rec/skip', {
                     method: 'POST',
                     body: {trackId: track.id, artist: track.artist, playedMs}

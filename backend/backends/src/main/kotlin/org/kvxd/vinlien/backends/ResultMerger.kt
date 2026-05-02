@@ -25,7 +25,8 @@ object TrackMerger {
             artists = mergedArtists,
             lastFmUrl = group.mapNotNull { it.lastFmUrl }.firstOrNull() ?: primary.lastFmUrl,
             albumTitle = group.mapNotNull { it.albumTitle }.firstOrNull() ?: primary.albumTitle,
-            albumId = group.mapNotNull { it.albumId }.firstOrNull() ?: primary.albumId
+            albumId = group.mapNotNull { it.albumId }.firstOrNull() ?: primary.albumId,
+            popularityScore = group.mapNotNull { it.popularityScore }.maxOrNull() ?: primary.popularityScore
         )
     }
 }
