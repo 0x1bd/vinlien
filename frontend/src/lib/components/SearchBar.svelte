@@ -1,5 +1,7 @@
 <script lang="ts">
     import {onDestroy} from 'svelte';
+    import {fade, fly} from 'svelte/transition';
+    import {cubicOut} from 'svelte/easing';
     import {goto} from '$app/navigation';
     import {apiRequest} from '$lib/utils/api';
     import {queue, currentTrackIndex, isPlaying} from '$lib/utils/store';
@@ -105,7 +107,9 @@
     </div>
 
     {#if isSearchOpen && query.trim()}
-        <div class="search-results open">
+        <div class="search-results open"
+             in:fly={{ y: 20, duration: 300, easing: cubicOut }}
+             out:fade={{ duration: 200 }}>
             {#if isSearching}
                 {#each Array(4) as _}
                     <div class="skeleton-row">
@@ -133,16 +137,19 @@
 
                 {#if searchResults.tracks.length > 0}
                     <div class="search-section-title" style="margin-top: 16px;">Tracks</div>
-                    {#each searchResults.tracks as track}
-                        <TrackRow {track} onPlay={() => playTrack(track)}/>
+                    {#each searchResults.tracks as track, i (track.id)}
+                        <div in:fly={{ y: 10, duration: 300, delay: i * 30, easing: cubicOut }}>
+                            <TrackRow {track} onPlay={() => playTrack(track)}/>
+                        </div>
                     {/each}
                 {/if}
 
                 {#if searchResults.albums.length > 0}
                     <div class="search-section-title" style="margin-top: 16px;">Albums</div>
                     <div class="album-scroll">
-                        {#each searchResults.albums as album}
-                            <div style="min-width: 150px; width: 150px;">
+                        {#each searchResults.albums as album, i (album.id)}
+                            <div style="min-width: 150px; width: 150px;"
+                                 in:fly={{ x: 20, duration: 400, delay: i * 50, easing: cubicOut }}>
                                 <AlbumCard {album}/>
                             </div>
                         {/each}

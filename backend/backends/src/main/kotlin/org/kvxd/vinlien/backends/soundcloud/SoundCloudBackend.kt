@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.kvxd.vinlien.backends.Capability
 import org.kvxd.vinlien.backends.MusicProvider
@@ -30,7 +31,8 @@ private data class ScTrack(
     val title: String? = null,
     val duration: Long? = null,
     val policy: String? = null,
-    val artwork_url: String? = null,
+    @SerialName("artwork_url")
+    val artworkUrl: String? = null,
     val user: ScUser? = null,
     val media: ScMedia? = null
 ) {
@@ -43,8 +45,8 @@ private data class ScTrack(
         if (policy?.uppercase() == "SNIPPET") return null
         if (durationMs in 1..45_000L) return null
 
-        val artworkUrl = artwork_url?.replace("large", "t500x500")
-            ?: user?.avatar_url?.replace("large", "t500x500")
+        val artworkUrl = artworkUrl?.replace("large", "t500x500")
+            ?: user?.avatarUrl?.replace("large", "t500x500")
             ?: "https://ui-avatars.com/api/?name=${URLEncoder.encode(artist, "UTF-8")}&background=random"
 
         val streamUrl = media?.transcodings?.firstOrNull {
@@ -64,7 +66,11 @@ private data class ScTrack(
 }
 
 @Serializable
-private data class ScUser(val username: String? = null, val avatar_url: String? = null)
+private data class ScUser(
+    val username: String? = null,
+    @SerialName("avatar_url")
+    val avatarUrl: String? = null
+)
 
 @Serializable
 private data class ScMedia(val transcodings: List<ScTranscoding> = emptyList())
@@ -135,7 +141,7 @@ class SoundCloudBackend : MusicProvider {
             sharedJson.decodeFromString<ScSearchResponse>(
                 fetch("https://api-v2.soundcloud.com/search/tracks?q=$encoded&client_id=${getClientId()}&limit=15")
             ).collection.mapNotNull { it.toDomainTrack() }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -147,7 +153,7 @@ class SoundCloudBackend : MusicProvider {
             sharedJson.decodeFromString<ScTrendingResponse>(
                 fetch("https://api-v2.soundcloud.com/charts?kind=trending&genre=soundcloud:genres:all-music&client_id=${getClientId()}&limit=10")
             ).collection.mapNotNull { it.track?.toDomainTrack() }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -159,7 +165,7 @@ class SoundCloudBackend : MusicProvider {
                 fetch("${track.streamUrl}?client_id=${getClientId()}")
             )
             res.url
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

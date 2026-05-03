@@ -19,15 +19,25 @@ class RecommendationEngine {
     data class ListeningVector(
         val artistScores: Map<String, Double>,
         val likedArtistIds: Set<String>,
+        val likedTrackIds: Set<String>,
+        val dislikedTrackIds: Set<String>,
+        val dislikedArtistIds: Set<String>,
         val trackSkipScores: Map<String, Double>,
         val artistSkipScores: Map<String, Double>,
-        val topFamiliarArtists: Set<String>
+        val topFamiliarArtists: Set<String>,
+        val tasteCapsules: List<TasteCapsuleModel>,
+        val globalFeatureCentroid: Map<String, Double>
     )
 
     fun buildListeningVector(
         history: List<HistoryEntry>,
         skips: List<SkipEntry>,
         likedArtists: Set<String> = emptySet(),
+        likedTrackIds: Set<String> = emptySet(),
+        dislikedTrackIds: Set<String> = emptySet(),
+        dislikedArtists: Set<String> = emptySet(),
+        tasteSignals: List<TasteTrackSignal> = emptyList(),
+        tasteCapsules: List<TasteCapsuleModel> = emptyList(),
         halfLifeDays: Int = 14,
         nowMs: Long = System.currentTimeMillis()
     ): ListeningVector {
@@ -64,26 +74,69 @@ class RecommendationEngine {
             .map { it.key }
             .toSet()
 
-        return ListeningVector(artistScores, likedArtists, trackSkipScores, artistSkipScores, topFamiliarArtists)
+        val globalFeatureCentroid = TasteGraph.centroid(
+            tasteSignals
+                .sortedByDescending { it.weight }
+                .take(80)
+                .map { signal ->
+                    TasteGraph.extractFeatures(signal.track).mapValues { it.value * signal.weight }
+                }
+        )
+
+        return ListeningVector(
+            artistScores = artistScores,
+            likedArtistIds = likedArtists,
+            likedTrackIds = likedTrackIds,
+            dislikedTrackIds = dislikedTrackIds,
+            dislikedArtistIds = dislikedArtists,
+            trackSkipScores = trackSkipScores,
+            artistSkipScores = artistSkipScores,
+            topFamiliarArtists = topFamiliarArtists,
+            tasteCapsules = tasteCapsules,
+            globalFeatureCentroid = globalFeatureCentroid
+        )
     }
 
     fun scoreCandidate(
         track: Track,
         vector: ListeningVector,
-        recentPlayedIds: Set<String>
+        recentPlayedIds: Set<String>,
+        contextFeatures: Map<String, Double> = emptyMap(),
+        activeCapsules: List<Pair<TasteCapsuleModel, Double>> = emptyList()
     ): Double {
         val artist = track.artist.normArtist()
         val artistScore = vector.artistScores[artist] ?: 0.0
+        val trackIds = listOfNotNull(track.id, track.canonicalId).toSet()
 
-        val familiarityBonus = artistScore * 50.0
-        val likedBonus = if (artist in vector.likedArtistIds) 15.0 * (1.0 - artistScore * 0.6) else 0.0
-        val trackSkipPenalty = (vector.trackSkipScores[track.id] ?: 0.0) * 45.0
-        val artistSkipPenalty = (vector.artistSkipScores[artist] ?: 0.0) * 15.0
-        val recentPenalty = if (track.id in recentPlayedIds ||
-                                (track.canonicalId != null && track.canonicalId in recentPlayedIds)) 60.0
-                            else 0.0
+        val capsuleFit = TasteGraph.capsuleFit(track, activeCapsules)
+        val globalFit = TasteGraph.featureSimilarity(track, vector.globalFeatureCentroid)
+        val contextFit = TasteGraph.featureSimilarity(track, contextFeatures)
 
-        return familiarityBonus + likedBonus - trackSkipPenalty - artistSkipPenalty - recentPenalty
+        val familiarityBonus = artistScore * 18.0
+        val capsuleBonus = capsuleFit * 88.0
+        val globalTasteBonus = globalFit * 30.0
+        val transitionBonus = contextFit * 22.0
+        val likedArtistBonus = if (artist in vector.likedArtistIds) 16.0 * (1.0 - artistScore * 0.35) else 0.0
+        val likedTrackBonus = if (trackIds.any { it in vector.likedTrackIds }) 42.0 else 0.0
+        val artworkUrl = track.artworkUrl
+        val qualityBonus = (if (artworkUrl != null && !artworkUrl.contains("ytimg.com")) 4.0 else 0.0) +
+                (if (track.lastFmUrl != null) 3.0 else 0.0) +
+                (if (track.durationMs > 0) 2.0 else 0.0)
+
+        val trackSkipPenalty = trackIds.maxOfOrNull { vector.trackSkipScores[it] ?: 0.0 }?.times(24.0) ?: 0.0
+        val explicitDislikePenalty = if (trackIds.any { it in vector.dislikedTrackIds } || artist in vector.dislikedArtistIds) 260.0 else 0.0
+        val recentPenalty = if (trackIds.any { it in recentPlayedIds }) 70.0 else 0.0
+
+        return familiarityBonus +
+                capsuleBonus +
+                globalTasteBonus +
+                transitionBonus +
+                likedArtistBonus +
+                likedTrackBonus +
+                qualityBonus -
+                trackSkipPenalty -
+                explicitDislikePenalty -
+                recentPenalty
     }
 
     private fun sampleSoftmax(
@@ -125,11 +178,27 @@ class RecommendationEngine {
         recentPlayedIds: Set<String>,
         sessionArtists: List<String>,
         noveltyBudget: Float = 0.30f,
-        maxConsecutiveSameArtist: Int = 3
+        maxConsecutiveSameArtist: Int = 3,
+        contextTracks: List<Track> = emptyList(),
+        selectedTracks: List<Track> = emptyList()
     ): Pair<Track, String>? {
         if (candidates.isEmpty()) return null
 
-        val scored = candidates.map { t -> t to scoreCandidate(t, vector, recentPlayedIds) }
+        val activeCapsules = TasteGraph.activeCapsules(vector.tasteCapsules, contextTracks, limit = 3)
+        val contextFeatures = TasteGraph.centroid(contextTracks.takeLast(12).map(TasteGraph::extractFeatures))
+        val scored = candidates.map { t ->
+            val redundancy = selectedTracks.maxOfOrNull { selected -> TasteGraph.featureSimilarity(t, selected) } ?: 0.0
+            val sameArtistSelected = selectedTracks.any { it.artist.normArtist() == t.artist.normArtist() }
+            val noveltyLift = if ((vector.artistScores[t.artist.normArtist()] ?: 0.0) < 0.08 &&
+                TasteGraph.capsuleFit(t, activeCapsules) >= 0.16
+            ) noveltyBudget * 12.0 else 0.0
+
+            val score = scoreCandidate(t, vector, recentPlayedIds, contextFeatures, activeCapsules) +
+                    noveltyLift -
+                    redundancy * (34.0 + noveltyBudget * 38.0) -
+                    if (sameArtistSelected) 10.0 else 0.0
+            t to score
+        }
 
         val lastN = sessionArtists.takeLast(maxConsecutiveSameArtist).map { it.normArtist() }
         val blockedArtist = run {
@@ -153,7 +222,7 @@ class RecommendationEngine {
             if (forceNovelty) vector.topFamiliarArtists else null
         ) ?: return null
 
-        return pick to buildReason(pick, vector)
+        return pick to buildReason(pick, vector, contextTracks)
     }
 
     fun buildRadioQueue(
@@ -163,17 +232,27 @@ class RecommendationEngine {
         sessionArtists: List<String>,
         queueSize: Int = 10,
         noveltyBudget: Float = 0.30f,
-        maxConsecutiveSameArtist: Int = 3
+        maxConsecutiveSameArtist: Int = 3,
+        contextTracks: List<Track> = emptyList()
     ): List<RecResult> {
         val result = mutableListOf<RecResult>()
         val remaining = candidates.toMutableList()
         val currentSession = sessionArtists.toMutableList()
+        val selectedTracks = mutableListOf<Track>()
 
         while (result.size < queueSize && remaining.isNotEmpty()) {
             val pick = pickWithDiversity(
-                remaining, vector, recentPlayedIds, currentSession, noveltyBudget, maxConsecutiveSameArtist
+                candidates = remaining,
+                vector = vector,
+                recentPlayedIds = recentPlayedIds,
+                sessionArtists = currentSession,
+                noveltyBudget = noveltyBudget,
+                maxConsecutiveSameArtist = maxConsecutiveSameArtist,
+                contextTracks = contextTracks + selectedTracks,
+                selectedTracks = selectedTracks
             ) ?: break
             result.add(RecResult(pick.first, pick.second))
+            selectedTracks.add(pick.first)
             currentSession.add(pick.first.artist.normArtist())
 
             val pickedFp = TrackFingerprint.of(pick.first.title)
@@ -187,10 +266,15 @@ class RecommendationEngine {
         return result
     }
 
-    fun buildReason(track: Track, vector: ListeningVector): String {
+    fun buildReason(track: Track, vector: ListeningVector, contextTracks: List<Track> = emptyList()): String {
         val artist = track.artist.normArtist()
         val score = vector.artistScores[artist] ?: 0.0
+        val activeCapsules = TasteGraph.activeCapsules(vector.tasteCapsules, contextTracks, limit = 3)
+        val bestCapsule = activeCapsules
+            .map { it.first to TasteGraph.capsuleFit(track, listOf(it)) }
+            .maxByOrNull { it.second }
         return when {
+            bestCapsule != null && bestCapsule.second >= 0.28 -> "Fits ${bestCapsule.first.label}"
             artist in vector.likedArtistIds && score >= 0.4 -> "From your favourites"
             score >= 0.75 -> "One of your top artists"
             score >= 0.4  -> if (track.artist.isNotBlank()) "You listen to ${track.artist}" else "Similar to artists you like"

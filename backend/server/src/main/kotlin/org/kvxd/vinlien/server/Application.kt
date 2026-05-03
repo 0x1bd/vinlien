@@ -26,6 +26,8 @@ import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
 import org.kvxd.vinlien.backends.musicbrainz.MusicBrainzMetadataProvider
 import org.kvxd.vinlien.backends.soundcloud.SoundCloudBackend
+import org.kvxd.vinlien.server.db.DatabaseFactory
+import org.kvxd.vinlien.server.db.Users
 import org.kvxd.vinlien.server.routes.*
 import org.slf4j.event.Level
 import java.io.File

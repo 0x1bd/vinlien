@@ -18,12 +18,9 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.*
+import org.kvxd.vinlien.server.db.repositories.TrackRepository
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.CacheManager
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.Tracks
 import org.slf4j.LoggerFactory
 
 @Serializable
@@ -136,19 +133,13 @@ private suspend fun ApplicationCall.respondCached(bytes: ByteArray, ct: String) 
 }
 
 private suspend fun enrichTrack(req: ArtworkEnrichRequest, engine: AggregationEngine): String? {
-    val stored = dbQuery {
-        Tracks.selectAll().where { Tracks.id eq req.id }
-            .map { it[Tracks.artworkUrl] }
-            .firstOrNull()
-    }
+    val stored = TrackRepository.getArtworkUrl(req.id)
     if (stored != null && !stored.contains("ytimg.com")) return stored
 
     val artworkUrl = runCatching { engine.enrichArtwork(req.title, req.artist) }.getOrNull()
 
     if (artworkUrl != null) {
-        dbQuery {
-            Tracks.update({ Tracks.id eq req.id }) { it[Tracks.artworkUrl] = artworkUrl }
-        }
+        TrackRepository.updateArtworkUrl(req.id, artworkUrl)
     }
 
     return artworkUrl

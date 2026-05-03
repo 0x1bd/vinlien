@@ -138,7 +138,7 @@ class ItunesMetadataProvider : MusicProvider {
                     canonicalId = Normalizer.canonicalIdFor(artist, title)
                 )
             } ?: emptyList()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }

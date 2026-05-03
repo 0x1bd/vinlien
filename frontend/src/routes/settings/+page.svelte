@@ -2,6 +2,35 @@
     import {showVolumeSlider, theme, useRecommendations, continuePlaylist} from '$lib/utils/store';
     import {KEYBINDS} from '$lib/utils/keybinds';
     import {themes} from '$lib/utils/themes';
+    import {apiRequest} from '$lib/utils/api';
+
+    let isDeleting = false;
+    let deleteMessage = '';
+
+    async function deleteData() {
+        if (!confirm('Are you absolutely sure? This will delete all your play history, playlists, and taste data. This action cannot be undone.')) {
+            return;
+        }
+
+        isDeleting = true;
+        deleteMessage = '';
+
+        try {
+            await apiRequest('/api/auth/delete-data', { method: 'POST' });
+            deleteMessage = 'Your data has been deleted successfully.';
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } catch (e: unknown) {
+            if (e instanceof Error) {
+                deleteMessage = 'Failed to delete data: ' + e.message;
+            } else {
+                deleteMessage = 'An error occurred while deleting data.';
+            }
+        } finally {
+            isDeleting = false;
+        }
+    }
 </script>
 
 <div class="header">
@@ -86,7 +115,25 @@
         </div>
     </div>
 
-
+    <div class="danger-zone">
+        <h3 class="danger-title">Danger Zone</h3>
+        <div class="setting-item danger-item">
+            <div class="info">
+                <h3>Delete Taste Graph & Data</h3>
+                <p>Permanently remove your play history, playlists, and personalized taste data. Your account will not be deleted.</p>
+            </div>
+            <button
+                class="danger-button"
+                on:click={deleteData}
+                disabled={isDeleting}
+            >
+                {isDeleting ? 'Deleting...' : 'Delete My Data'}
+            </button>
+        </div>
+        {#if deleteMessage}
+            <p class="delete-msg" class:error={deleteMessage.includes('Failed')}>{deleteMessage}</p>
+        {/if}
+    </div>
 </div>
 
 <style>
@@ -288,6 +335,58 @@
         font-size: 11px;
         color: var(--text-secondary);
         user-select: none;
+    }
+
+    .danger-zone {
+        margin-top: 32px;
+        padding-top: 32px;
+        border-top: 1px solid var(--border-subtle);
+    }
+
+    .danger-title {
+        color: var(--danger-color, #ff4444);
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 16px;
+        font-weight: 700;
+    }
+
+    .danger-item {
+        border-color: color-mix(in srgb, var(--danger-color, #ff4444) 30%, var(--border-subtle));
+    }
+
+    .danger-button {
+        background: var(--danger-color, #ff4444);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .danger-button:hover:not(:disabled) {
+        opacity: 0.9;
+    }
+
+    .danger-button:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    .danger-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .delete-msg {
+        margin-top: 12px;
+        font-size: 14px;
+        color: var(--accent-color);
+        font-weight: 500;
+    }
+
+    .delete-msg.error {
+        color: var(--danger-color, #ff4444);
     }
 
     @media (max-width: 768px) {

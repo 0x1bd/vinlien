@@ -4,12 +4,9 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.v1.jdbc.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.server.CacheManager
-import org.kvxd.vinlien.server.DatabaseFactory
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.History
+import org.kvxd.vinlien.server.db.repositories.HistoryRepository
 import org.kvxd.vinlien.server.getUserId
 import org.kvxd.vinlien.server.services.HomeFeedService
 import org.kvxd.vinlien.server.services.RecService
@@ -21,14 +18,7 @@ fun Route.feedRoutes(engine: AggregationEngine) {
     post("/api/history") {
         val track = call.receive<Track>()
         val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
-        dbQuery {
-            DatabaseFactory.insertOrUpdateTrack(track)
-            History.insert {
-                it[this.userId] = userId
-                it[trackId] = track.id
-                it[timestamp] = System.currentTimeMillis()
-            }
-        }
+        HistoryRepository.insert(userId, track)
         CacheManager.homeFeed.remove(userId)
         RecService.invalidate(userId)
         call.respond(HttpStatusCode.OK)

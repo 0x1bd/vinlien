@@ -5,7 +5,7 @@
     export let album: Album;
 </script>
 
-<a class="album-card" href="/album/{encodeURIComponent(album.id)}">
+<a class="album-card" href="/album/{encodeURIComponent(album.artist)}/{encodeURIComponent(album.title)}">
     <div class="img-wrapper">
         <ArtworkImage src={album.artworkUrl} seed={album.artist + album.title}>
             {album.title[0]?.toUpperCase() ?? '?'}

@@ -45,7 +45,7 @@ class AggregationEngineTest {
         val results = engine.searchTracks("Daft Punk")
         assertTrue(results.isNotEmpty())
         val providerIds = results.map { it.id.substringBefore(":") }.distinct()
-        assertTrue(providerIds.size >= 1, "Should have results from at least one provider")
+        assertTrue(providerIds.isNotEmpty(), "Should have results from at least one provider")
     }
 
     @Test

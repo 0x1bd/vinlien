@@ -28,7 +28,8 @@ private data class DzrTrack(
     val duration: Int? = null,
     val artist: DzrArtistRef? = null,
     val album: DzrAlbumRef? = null,
-    val contributors: List<DzrArtistRef> = emptyList()
+    val contributors: List<DzrArtistRef> = emptyList(),
+    val rank: Long? = null
 ) {
     fun toDomainTrack(): Track? {
         val trackId = id ?: return null
@@ -46,7 +47,8 @@ private data class DzrTrack(
             canonicalId = Normalizer.canonicalIdFor(artistName, title),
             albumTitle = album?.title,
             albumId = if (album?.id != null && album.title != null)
-                "deezer:album:${album.id}:::${artistName}:::${album.title}" else null
+                "deezer:album:${album.id}:::${artistName}:::${album.title}" else null,
+            popularityScore = rank?.toDouble()
         )
     }
 }
@@ -77,10 +79,10 @@ private data class DzrAlbumSummary(
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("record_type") val recordType: String? = null
 ) {
-    fun toDomainAlbum(): Album? {
+    fun toDomainAlbum(fallbackArtistName: String? = null): Album? {
         val albumId = id ?: return null
         val title = title ?: return null
-        val artistName = artist?.name ?: return null
+        val artistName = artist?.name ?: fallbackArtistName ?: return null
         val artworkUrl = (coverXl ?: coverBig).validDeezerImage()
         val year = releaseDate?.take(4)?.toIntOrNull()
         return Album(
@@ -130,6 +132,7 @@ class DeezerMetadataProvider : MusicProvider {
         Capability.ALBUM_SEARCH,
         Capability.ARTIST_INFO,
         Capability.ARTIST_ALBUMS,
+        Capability.ARTIST_TOP_TRACKS,
         Capability.ALBUM_TRACKS,
         Capability.RECOMMENDATIONS,
         Capability.TRENDING
@@ -236,16 +239,38 @@ class DeezerMetadataProvider : MusicProvider {
         try {
             val artistId = findArtistId(artist) ?: return@withContext emptyList()
             val res = fetchParsed<DzrListResponse<DzrAlbumSummary>>(
-                apiUrl("artist/$artistId/albums", "limit" to "50"),
+                apiUrl("artist/$artistId/albums", "limit" to "100"),
                 "ARTIST_ALBUMS"
             )
-            val albums = res.data
-                .filter { it.recordType == null || it.recordType in setOf("album", "ep") }
-                .mapNotNull { it.toDomainAlbum() }
+
+            val resolvedArtistName = try {
+                val full = fetchParsed<DzrArtistFull>(apiUrl("artist/$artistId"), "ARTIST_ALBUMS")
+                full.name ?: artist
+            } catch (_: Throwable) {
+                artist
+            }
+
+            val albums = res.data.mapNotNull { it.toDomainAlbum(resolvedArtistName) }
             BackendDebugger.logResponse(id, "ARTIST_ALBUMS", albums.size, "")
             albums
         } catch (e: Exception) {
             BackendDebugger.logError(id, "ARTIST_ALBUMS", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun getArtistTopTracks(artist: String): List<Track> = withContext(Dispatchers.IO) {
+        try {
+            val artistId = findArtistId(artist) ?: return@withContext emptyList()
+            val res = fetchParsed<DzrListResponse<DzrTrack>>(
+                apiUrl("artist/$artistId/top", "limit" to "50"),
+                "ARTIST_TOP_TRACKS"
+            )
+            val tracks = res.data.mapNotNull { it.toDomainTrack() }
+            BackendDebugger.logResponse(id, "ARTIST_TOP_TRACKS", tracks.size, "")
+            tracks
+        } catch (e: Exception) {
+            BackendDebugger.logError(id, "ARTIST_TOP_TRACKS", e)
             emptyList()
         }
     }

@@ -1,34 +1,54 @@
 package org.kvxd.vinlien.server.services
 
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.DatabaseFactory.toTrack
-import org.kvxd.vinlien.server.History
-import org.kvxd.vinlien.server.Tracks
+import org.kvxd.vinlien.server.TrackFingerprint
+import org.kvxd.vinlien.server.db.repositories.HistoryRepository
 import org.kvxd.vinlien.shared.models.feed.HomeFeed
+import org.kvxd.vinlien.shared.models.media.Track
 
 object HomeFeedService {
 
-    suspend fun buildFeed(userId: String): HomeFeed = dbQuery {
-        val parsedTracks = (History innerJoin Tracks)
-            .selectAll()
-            .where { History.userId eq userId }
-            .orderBy(History.timestamp to SortOrder.DESC)
-            .limit(200)
-            .map { it.toTrack() }
+    suspend fun buildFeed(userId: String): HomeFeed {
+        val parsedTracks = HistoryRepository.getRecentHistory(userId, limit = 200).map { it.first }
 
-        val recentlyPlayed = parsedTracks.distinctBy { it.canonicalId ?: it.id }.take(10)
-        val trackCounts = parsedTracks.groupingBy { it }.eachCount()
-        val listenAgain = trackCounts.filter { it.value >= 2 }.keys.toList().shuffled().take(10)
-        val recentIds = recentlyPlayed.take(15).map { it.id }
-        val forgottenFavorites = trackCounts
-            .filter { it.value >= 2 && it.key.id !in recentIds }
-            .entries.sortedByDescending { it.value }
-            .map { it.key }
+        val tracksBySong = parsedTracks.groupBy { it.songKey() }
+        val representativeTracks = tracksBySong.mapValues { (_, tracks) -> tracks.bestRepresentative() }
+
+        val recentlyPlayed = parsedTracks
+            .distinctBy { it.songKey() }
+            .take(10)
+
+        val listenAgain = tracksBySong
+            .filter { it.value.size >= 2 }
+            .keys
+            .shuffled()
+            .mapNotNull { representativeTracks[it] }
+            .take(10)
+
+        val recentSongKeys = recentlyPlayed.take(15).map { it.songKey() }.toSet()
+        val forgottenFavorites = tracksBySong
+            .filter { it.value.size >= 2 && it.key !in recentSongKeys }
+            .entries.sortedByDescending { it.value.size }
+            .mapNotNull { representativeTracks[it.key] }
             .take(10)
         val artists = parsedTracks.flatMap { it.artists }.distinct().shuffled().take(3)
 
-        HomeFeed(recentlyPlayed, listenAgain, forgottenFavorites, artists)
+        return HomeFeed(recentlyPlayed, listenAgain, forgottenFavorites, artists)
     }
+
+    private fun Track.songKey(): String {
+        canonicalId?.trim()?.lowercase()?.takeIf { it.isNotBlank() }?.let { return it }
+        val artistKey = TrackFingerprint.of(artist)
+        val titleKey = TrackFingerprint.of(title)
+        return "$artistKey:::$titleKey"
+    }
+
+    private fun List<Track>.bestRepresentative(): Track =
+        maxWithOrNull(
+            compareBy<Track> {
+                val artworkUrl = it.artworkUrl
+                if (artworkUrl != null && !artworkUrl.contains("ytimg.com")) 1 else 0
+            }.thenBy { if (it.durationMs > 0) 1 else 0 }
+                .thenBy { if (it.lastFmUrl != null) 1 else 0 }
+                .thenBy { it.artists.size }
+        ) ?: first()
 }

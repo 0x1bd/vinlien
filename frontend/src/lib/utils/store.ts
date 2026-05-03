@@ -44,6 +44,7 @@ export const isSidebarOpen = writable(true);
 export const queue = writable<Track[]>([]);
 export const currentTrackIndex = writable(-1);
 export const isPlaying = writable(false);
+export const isPlayerExpanded = writable(false);
 
 export const volume = createPersistedStore<number>('vinlien_volume', 1);
 export const isMuted = createPersistedStore<boolean>('vinlien_muted', false);
@@ -61,6 +62,37 @@ export const currentTrack = derived(
     [queue, currentTrackIndex],
     ([$queue, $currentTrackIndex]) => $queue[$currentTrackIndex] || null
 );
+
+export const similarTracks = writable<Track[]>([]);
+export const isFetchingSimilar = writable(false);
+let lastSimilarSeedId = '';
+
+export async function fetchSimilarTracksIfNeeded(track: Track) {
+    if (!track || get(isFetchingSimilar)) return;
+    if (lastSimilarSeedId === track.id) return;
+    
+    isFetchingSimilar.set(true);
+    try {
+        const { apiRequest } = await import('$lib/utils/api');
+        const rec = await apiRequest('/api/rec/similar', {
+            method: 'POST', 
+            body: {
+                seedTrack: track,
+                queue: [], 
+                sessionArtists: [],
+                queueSize: 30
+            }
+        });
+        if (rec && rec.tracks) {
+            similarTracks.set(rec.tracks.map((r: any) => r.track));
+            lastSimilarSeedId = track.id;
+        }
+    } catch (e) {
+        console.error("Failed to fetch similar tracks", e);
+    } finally {
+        isFetchingSimilar.set(false);
+    }
+}
 
 export const serverAvailable = writable(true);
 export const autoDownloadPlaylists = createPersistedStore<string[]>('vinlien_autoDownload', []);

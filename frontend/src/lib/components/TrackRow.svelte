@@ -104,7 +104,9 @@
         background: none;
         border: none;
         padding: 0;
+        min-height: 0;
         font: inherit;
+        line-height: inherit;
         color: inherit;
         cursor: pointer;
     }
@@ -158,6 +160,10 @@
     }
 
     @media (max-width: 768px) {
+        .track-row {
+            padding: 8px 12px;
+        }
+
         .add-btn, .delete-btn {
             opacity: 1;
         }

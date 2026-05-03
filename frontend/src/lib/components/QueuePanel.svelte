@@ -1,13 +1,38 @@
 <script lang="ts">
-    import {queue, currentTrackIndex, showQueuePanel, userPlaylists} from '$lib/utils/store';
+    import {
+        queue,
+        currentTrackIndex,
+        showQueuePanel,
+        userPlaylists,
+        similarTracks,
+        isFetchingSimilar,
+        currentTrack,
+        fetchSimilarTracksIfNeeded
+    } from '$lib/utils/store';
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import TrackRow from './TrackRow.svelte';
+    import { fade } from 'svelte/transition';
 
+    export let inline = false;
+
+    let innerWidth = 0;
     let touchStartX = 0;
     let showNameInput = false;
     let newPlaylistName = '';
     let isSavingQueue = false;
+
+    let activeTab: 'queue' | 'similar' = 'queue';
+
+    $: showSimilarTab = !inline || innerWidth <= 1550;
+
+    $: if (!showSimilarTab && activeTab === 'similar') {
+        activeTab = 'queue';
+    }
+
+    $: if (activeTab === 'similar' && $currentTrack && (inline || $showQueuePanel)) {
+        fetchSimilarTracksIfNeeded($currentTrack);
+    }
 
     function handleTouchStart(e: TouchEvent) {
         if (window.innerWidth <= 600) {
@@ -48,15 +73,30 @@
         if (e.key === 'Enter') saveQueueAsPlaylist();
         if (e.key === 'Escape') { showNameInput = false; newPlaylistName = ''; }
     }
+
+    function playSimilar(track: any) {
+        $queue = [...$queue, track];
+        $currentTrackIndex = $queue.length - 1;
+    }
 </script>
 
-<div class="queue-panel" class:open={$showQueuePanel}
+<svelte:window bind:innerWidth />
+
+<div class="queue-panel" class:open={$showQueuePanel} class:inline={inline}
      on:touchstart={handleTouchStart}
      on:touchend={handleTouchEnd}>
     <div class="header">
-        <h3>Queue</h3>
+        {#if showSimilarTab}
+            <div class="tabs">
+                <button class:active={activeTab === 'queue'} on:click={() => activeTab = 'queue'}>Queue</button>
+                <button class:active={activeTab === 'similar'} on:click={() => activeTab = 'similar'}>Similar</button>
+            </div>
+        {:else}
+            <h3>Queue</h3>
+        {/if}
+
         <div class="header-actions">
-            {#if $queue.length > 0}
+            {#if activeTab === 'queue' && $queue.length > 0}
                 <button class="icon-btn save-btn" class:active={showNameInput}
                         on:click={() => { showNameInput = !showNameInput; if (!showNameInput) newPlaylistName = ''; }}
                         title="Save queue as playlist">
@@ -67,39 +107,57 @@
                     </svg>
                 </button>
             {/if}
-            <button class="icon-btn" on:click={() => $showQueuePanel = false}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
+            {#if !inline}
+                <button class="icon-btn" on:click={() => $showQueuePanel = false}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            {/if}
         </div>
     </div>
 
-    {#if showNameInput}
-        <div class="save-row">
-            <!-- svelte-ignore a11y-autofocus -->
-            <input
-                autofocus
-                class="save-input"
-                bind:value={newPlaylistName}
-                placeholder="Playlist name…"
-                on:keydown={handleNameKeydown}
-            />
-            <button class="save-confirm-btn" on:click={saveQueueAsPlaylist}
-                    disabled={isSavingQueue || !newPlaylistName.trim()}>
-                {isSavingQueue ? '…' : 'Save'}
-            </button>
+    {#if activeTab === 'queue'}
+        {#if showNameInput}
+            <div class="save-row" in:fade={{ duration: 150 }}>
+                <!-- svelte-ignore a11y-autofocus -->
+                <input
+                        autofocus
+                        class="save-input"
+                        bind:value={newPlaylistName}
+                        placeholder="Playlist name…"
+                        on:keydown={handleNameKeydown}
+                />
+                <button class="save-confirm-btn" on:click={saveQueueAsPlaylist}
+                        disabled={isSavingQueue || !newPlaylistName.trim()}>
+                    {isSavingQueue ? '…' : 'Save'}
+                </button>
+            </div>
+        {/if}
+
+        <div class="queue-list" in:fade={{ duration: 150 }}>
+            {#each $queue as track, i}
+                <div class="queue-item" class:playing={i === $currentTrackIndex}>
+                    <TrackRow {track} onPlay={() => $currentTrackIndex = i}/>
+                </div>
+            {/each}
+        </div>
+    {:else}
+        <div class="queue-list similar-list" in:fade={{ duration: 150 }}>
+            {#if $isFetchingSimilar}
+                <div class="msg">Loading similar tracks...</div>
+            {:else if $similarTracks.length === 0}
+                <div class="msg">No similar tracks found.</div>
+            {:else}
+                {#each $similarTracks as track}
+                    <div class="queue-item">
+                        <TrackRow {track} onPlay={() => playSimilar(track)}/>
+                    </div>
+                {/each}
+            {/if}
         </div>
     {/if}
-
-    <div class="queue-list">
-        {#each $queue as track, i}
-            <div class="queue-item" class:playing={i === $currentTrackIndex}>
-                <TrackRow {track} onPlay={() => $currentTrackIndex = i}/>
-            </div>
-        {/each}
-    </div>
 </div>
 
 <style>
@@ -122,18 +180,57 @@
         transform: translateX(0);
     }
 
+    .queue-panel.inline {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        transform: none;
+        border: none;
+        z-index: 1;
+        bottom: auto;
+        right: auto;
+        top: auto;
+    }
+
     .header {
-        padding: 16px;
+        padding: 0 16px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid var(--border-subtle);
         flex-shrink: 0;
+        height: 60px;
     }
 
     .header h3 {
         font-size: 16px;
         font-weight: 700;
+        margin: 0;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 16px;
+    }
+
+    .tabs button {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: color 0.2s ease;
+    }
+
+    .tabs button.active {
+        color: var(--text-primary);
+    }
+
+    .tabs button:hover:not(.active) {
+        color: var(--text-primary);
+        opacity: 0.8;
     }
 
     .header-actions {
@@ -150,6 +247,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        border: none;
+        cursor: pointer;
     }
 
     .icon-btn:hover {
@@ -194,6 +293,8 @@
         font-size: 13px;
         font-weight: 600;
         white-space: nowrap;
+        border: none;
+        cursor: pointer;
     }
 
     .save-confirm-btn:disabled {
@@ -216,15 +317,23 @@
         border-radius: 6px;
     }
 
+    .msg {
+        padding: 24px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
     @media (max-width: 600px) {
-        .queue-panel {
+        .queue-panel:not(.inline) {
             width: 100%;
             bottom: 0;
             top: 0;
             height: 100dvh;
+            z-index: 600;
         }
 
-        .header h3 {
+        .header h3, .tabs button {
             font-size: 18px;
         }
     }

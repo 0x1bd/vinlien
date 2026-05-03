@@ -128,6 +128,7 @@ class AudioManager {
                 durationDisplay.set("0:00");
 
                 apiRequest('/api/history', {method: 'POST', body: track}).catch(() => {});
+                this.reportPlaybackEvent(track, 'started', 0, false).catch(() => {});
 
                 this.loadTrack(track);
 
@@ -162,6 +163,8 @@ class AudioManager {
                 if (!track.artworkUrl || track.artworkUrl.includes('ytimg.com')) {
                     enrichArtwork(track).catch(() => {});
                 }
+
+                this.populateRecommendationsIfNeeded().catch(console.error);
             } else {
                 this.loadingForTrackId = null;
                 this.audio.pause();
@@ -223,40 +226,96 @@ class AudioManager {
         }
     }
 
-    private async preloadNextTrackIfNeeded() {
-        if (this.isFetchingRec) return;
+    private currentPlayedMs(): number {
+        if (this.audio.currentTime && Number.isFinite(this.audio.currentTime)) {
+            return Math.max(0, Math.round(this.audio.currentTime * 1000));
+        }
+        return this.trackStartTimeMs > 0 ? Math.max(0, Date.now() - this.trackStartTimeMs) : 0;
+    }
+
+    private currentDurationMs(track: Track): number {
+        if (this.audio.duration && Number.isFinite(this.audio.duration)) {
+            return Math.max(0, Math.round(this.audio.duration * 1000));
+        }
+        return track.durationMs || 0;
+    }
+
+    private async reportPlaybackEvent(
+        track: Track,
+        eventType: 'started' | 'completed' | 'advanced' | 'skip_requested',
+        playedMs = this.currentPlayedMs(),
+        wasManual = false
+    ): Promise<void> {
+        await apiRequest('/api/rec/play-event', {
+            method: 'POST',
+            body: {
+                track,
+                eventType,
+                playedMs,
+                durationMs: this.currentDurationMs(track),
+                source: get(useRecommendations) ? 'radio' : 'manual',
+                wasManual
+            }
+        });
+    }
+
+    private async populateRecommendationsIfNeeded(): Promise<void> {
+        if (this.isFetchingRec || !get(useRecommendations)) return;
 
         const q = get(queue);
         const idx = get(currentTrackIndex);
+        
+        const aheadCount = q.length - idx - 1;
+        if (aheadCount >= 10) return;
+        
+        const needed = 10 - aheadCount;
+        const seedTrack = q[q.length - 1] || q[idx];
+        if (!seedTrack) return;
+
+        this.isFetchingRec = true;
+        try {
+            const sessionArtists = q.slice(0, idx + 1).map(t => t.artist.toLowerCase());
+            const rec = await apiRequest('/api/radio', {
+                method: 'POST', 
+                body: {
+                    seedTrack, 
+                    queue: q, 
+                    sessionArtists, 
+                    queueSize: needed
+                }
+            });
+            if (rec && rec.tracks) {
+                queue.update(prev => [...prev, ...rec.tracks.map((r: any) => r.track)]);
+            }
+        } catch (e) {
+            console.error("Failed to fetch recommendations", e);
+        } finally {
+            this.isFetchingRec = false;
+        }
+    }
+
+    private async preloadNextTrackIfNeeded() {
+        if (this.isFetchingRec) return;
+
+        let q = get(queue);
+        let idx = get(currentTrackIndex);
         const rm = get(repeatMode);
         const currentTrackId = q[idx]?.id;
 
         if (!currentTrackId || this.preloadAttemptedForTrack === currentTrackId) return;
         this.preloadAttemptedForTrack = currentTrackId;
 
+        if (rm === 0 && get(useRecommendations)) {
+            await this.populateRecommendationsIfNeeded();
+            q = get(queue);
+            idx = get(currentTrackIndex);
+        }
+
         let nextTrack: Track | null = null;
-        let fetchRecs = false;
 
         if (rm === REPEAT_ONE) nextTrack = q[idx];
         else if (idx + 1 < q.length) nextTrack = q[idx + 1];
         else if (rm === REPEAT_ALL) nextTrack = q[0];
-        else fetchRecs = true;
-
-        if (fetchRecs && get(useRecommendations)) {
-            this.isFetchingRec = true;
-            try {
-                const sessionArtists = q.slice(0, idx + 1).map(t => t.artist.toLowerCase());
-                const rec = await apiRequest('/api/rec', {method: 'POST', body: {queue: q, sessionArtists}});
-                if (rec?.track) {
-                    nextTrack = rec.track;
-                    queue.update(q => [...q, nextTrack!]);
-                }
-            } catch (e) {
-                console.error("Failed to fetch recommendation", e);
-            } finally {
-                this.isFetchingRec = false;
-            }
-        }
 
         if (nextTrack && this.preloadedTrackId !== nextTrack.id) {
             this.preloadedTrackId = nextTrack.id;
@@ -271,11 +330,16 @@ class AudioManager {
         const q = get(queue);
         const rm = get(repeatMode);
         const idx = get(currentTrackIndex);
+        const track = q[idx];
 
-        if (force && this.trackStartTimeMs > 0) {
-            const track = q[idx];
-            if (track) {
-                const playedMs = Date.now() - this.trackStartTimeMs;
+        if (track && this.trackStartTimeMs > 0) {
+            const playedMs = this.currentPlayedMs();
+            const durationMs = this.currentDurationMs(track);
+            const completion = durationMs > 0 ? playedMs / durationMs : 0;
+            const eventType = force ? 'skip_requested' : (completion >= 0.8 ? 'completed' : 'advanced');
+            this.reportPlaybackEvent(track, eventType, playedMs, force).catch(() => {});
+
+            if (force) {
                 apiRequest('/api/rec/skip', {
                     method: 'POST',
                     body: {trackId: track.id, artist: track.artist, playedMs}
@@ -291,6 +355,9 @@ class AudioManager {
 
         if (idx + 1 < q.length) {
             currentTrackIndex.set(idx + 1);
+            if (rm === 0 && get(useRecommendations)) {
+                this.populateRecommendationsIfNeeded().catch(console.error);
+            }
             return;
         }
 
@@ -305,23 +372,15 @@ class AudioManager {
             return;
         }
 
-        this.isFetchingRec = true;
-        try {
-            const sessionArtists = q.map(t => t.artist.toLowerCase());
-            const rec = await apiRequest('/api/rec', {method: 'POST', body: {queue: q, sessionArtists}});
-            if (rec?.track) {
-                queue.update(q => [...q, rec.track]);
-                currentTrackIndex.set(idx + 1);
-            } else {
-                isPlaying.set(false);
-                audioProgress.set(0);
-            }
-        } catch (e) {
-            console.error("Failed to fetch recommendation", e);
+        await this.populateRecommendationsIfNeeded();
+        
+        const newQ = get(queue);
+        if (idx + 1 < newQ.length) {
+            currentTrackIndex.set(idx + 1);
+            this.populateRecommendationsIfNeeded().catch(console.error);
+        } else {
             isPlaying.set(false);
             audioProgress.set(0);
-        } finally {
-            this.isFetchingRec = false;
         }
     }
 

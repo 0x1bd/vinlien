@@ -5,13 +5,14 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.kvxd.vinlien.server.*
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
+import org.kvxd.vinlien.server.CacheManager
+import org.kvxd.vinlien.server.db.repositories.HistoryRepository
+import org.kvxd.vinlien.server.db.repositories.PlaylistRepository
+import org.kvxd.vinlien.server.db.repositories.UserRepository
+import org.kvxd.vinlien.server.getUserId
+import org.kvxd.vinlien.server.getUsername
 import org.kvxd.vinlien.server.services.AdminStatsService
 import org.kvxd.vinlien.shared.models.auth.ChangePasswordReq
-import org.kvxd.vinlien.shared.models.auth.User
 import org.mindrot.jbcrypt.BCrypt
 
 fun Route.adminRoutes() {
@@ -24,16 +25,13 @@ fun Route.adminRoutes() {
     post("/api/admin/approve/{id}") {
         if (!call.isAdmin()) return@post call.respond(HttpStatusCode.Forbidden)
         val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest)
-        dbQuery { Users.update({ Users.id eq id }) { it[role] = "APPROVED" } }
+        UserRepository.approveUser(id)
         call.respond(HttpStatusCode.OK)
     }
 
     get("/api/admin/users") {
         if (!call.isAdmin()) return@get call.respond(HttpStatusCode.Forbidden)
-        val users = dbQuery {
-            Users.selectAll().map { User(it[Users.id], it[Users.username], it[Users.role]) }
-        }
-        call.respond(users)
+        call.respond(UserRepository.getAllUsers())
     }
 
     delete("/api/admin/users/{id}") {
@@ -45,13 +43,10 @@ fun Route.adminRoutes() {
             HttpStatusCode.BadRequest, "Cannot delete your own admin account"
         )
 
-        dbQuery {
-            History.deleteWhere { History.userId eq id }
-            val playlistIds = Playlists.selectAll().where { Playlists.userId eq id }.map { it[Playlists.id] }
-            if (playlistIds.isNotEmpty()) PlaylistTracks.deleteWhere { PlaylistTracks.playlistId inList playlistIds }
-            Playlists.deleteWhere { Playlists.userId eq id }
-            Users.deleteWhere { Users.id eq id }
-        }
+        HistoryRepository.deleteForUser(id)
+        PlaylistRepository.deleteUserPlaylists(id)
+        UserRepository.deleteUser(id)
+
         call.respond(HttpStatusCode.OK)
     }
 
@@ -59,9 +54,7 @@ fun Route.adminRoutes() {
         if (!call.isAdmin()) return@post call.respond(HttpStatusCode.Forbidden)
         val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest)
         val req = call.receive<ChangePasswordReq>()
-        dbQuery {
-            Users.update({ Users.id eq id }) { it[passwordHash] = BCrypt.hashpw(req.newPassword, BCrypt.gensalt()) }
-        }
+        UserRepository.updatePasswordById(id, BCrypt.hashpw(req.newPassword, BCrypt.gensalt()))
         call.respond(HttpStatusCode.OK)
     }
 
@@ -74,7 +67,5 @@ fun Route.adminRoutes() {
 
 private suspend fun ApplicationCall.isAdmin(): Boolean {
     val username = getUsername() ?: return false
-    return dbQuery {
-        Users.selectAll().where { (Users.username eq username) and (Users.role eq "ADMIN") }.count() > 0
-    }
+    return UserRepository.isAdmin(username)
 }

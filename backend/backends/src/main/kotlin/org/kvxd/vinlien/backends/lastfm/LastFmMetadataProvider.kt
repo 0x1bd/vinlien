@@ -19,13 +19,14 @@ import org.kvxd.vinlien.shared.models.media.Track
 import java.net.URLDecoder
 import java.net.URLEncoder
 
-private val PLACEHOLDER_IMAGE_HASH = "2a96cbd8b46e442fc41c2b86b821562f"
+private const val PLACEHOLDER_IMAGE_HASH = "2a96cbd8b46e442fc41c2b86b821562f"
 
 @Serializable
 private data class LfmResponse(
     val results: LfmResults? = null,
     val similartracks: LfmWrapper? = null,
     val tracks: LfmWrapper? = null,
+    val toptracks: LfmTopTracksWrapper? = null,
     val album: LfmAlbum? = null,
     val artist: LfmArtistData? = null,
     val track: LfmTrackInfo? = null,
@@ -34,6 +35,9 @@ private data class LfmResponse(
 
 @Serializable
 private data class LfmTopAlbumsWrapper(val album: JsonElement? = null)
+
+@Serializable
+private data class LfmTopTracksWrapper(val track: JsonElement? = null)
 
 @Serializable
 private data class LfmTopAlbumItem(
@@ -83,7 +87,8 @@ private data class LfmTrack(
             durationMs = durationSec * 1000L,
             artworkUrl = artworkUrl,
             canonicalId = Normalizer.canonicalIdFor(resolvedArtist, title),
-            lastFmUrl = url
+            lastFmUrl = url,
+            popularityScore = listeners?.toDoubleOrNull()
         )
     }
 
@@ -146,13 +151,8 @@ class LastFmMetadataProvider(
     override val id = "lastfm"
     override val name = "Last.fm"
     override val capabilities = setOf(
-        Capability.TRACK_SEARCH,
-        Capability.ALBUM_SEARCH,
         Capability.ARTIST_INFO,
-        Capability.ARTIST_ALBUMS,
-        Capability.ALBUM_TRACKS,
-        Capability.RECOMMENDATIONS,
-        Capability.TRENDING
+        Capability.ARTIST_TOP_TRACKS
     )
 
     private fun apiUrl(method: String, vararg params: Pair<String, String>): String {
@@ -303,6 +303,9 @@ class LastFmMetadataProvider(
                     is JsonPrimitive -> a.content
                     else -> artist
                 }
+                if (!artistName.equals(artist, ignoreCase = true) && !artistName.contains(artist, ignoreCase = true)) {
+                    return@mapNotNull null
+                }
                 val artworkUrl = item.image.lastOrNull()?.text
                     ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
                 Album(
@@ -312,6 +315,17 @@ class LastFmMetadataProvider(
                     artworkUrl = artworkUrl
                 )
             }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    override suspend fun getArtistTopTracks(artist: String): List<Track> = withContext(Dispatchers.IO) {
+        try {
+            val res = fetchParsed(
+                apiUrl("artist.gettoptracks", "artist" to artist, "autocorrect" to "1", "limit" to "50")
+            )
+            res.toptracks?.track.parseLfmList<LfmTrack>().mapNotNull { it.toTrack(fallbackArtist = artist) }
         } catch (e: Exception) {
             emptyList()
         }

@@ -8,8 +8,8 @@
 
     let album: Album | null = null;
 
-    $: if ($page.params.id) {
-        apiRequest(`/api/album/${encodeURIComponent($page.params.id)}`).then(res => album = res);
+    $: if ($page.params.artist && $page.params.title) {
+        apiRequest(`/api/album/${encodeURIComponent($page.params.artist)}/${encodeURIComponent($page.params.title)}`).then(res => album = res);
     }
 
     function withArt(track: Track) {

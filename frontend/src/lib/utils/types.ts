@@ -10,6 +10,7 @@ export interface Track {
     lastFmUrl?: string | null;
     albumTitle?: string | null;
     albumId?: string | null;
+    popularityScore?: number | null;
 }
 
 export interface Album {

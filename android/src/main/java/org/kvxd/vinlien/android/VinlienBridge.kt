@@ -2,6 +2,7 @@ package org.kvxd.vinlien.android
 
 import android.webkit.JavascriptInterface
 
+@Suppress("unused")
 class VinlienBridge(private val service: MusicService) {
 
     @JavascriptInterface
