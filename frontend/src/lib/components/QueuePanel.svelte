@@ -12,6 +12,7 @@
     import {apiRequest} from '$lib/utils/api';
     import {addToast} from '$lib/utils/toast';
     import TrackRow from './TrackRow.svelte';
+    import { fade } from 'svelte/transition';
 
     export let inline = false;
 
@@ -119,7 +120,7 @@
 
     {#if activeTab === 'queue'}
         {#if showNameInput}
-            <div class="save-row">
+            <div class="save-row" in:fade={{ duration: 150 }}>
                 <!-- svelte-ignore a11y-autofocus -->
                 <input
                         autofocus
@@ -135,7 +136,7 @@
             </div>
         {/if}
 
-        <div class="queue-list">
+        <div class="queue-list" in:fade={{ duration: 150 }}>
             {#each $queue as track, i}
                 <div class="queue-item" class:playing={i === $currentTrackIndex}>
                     <TrackRow {track} onPlay={() => $currentTrackIndex = i}/>
@@ -143,7 +144,7 @@
             {/each}
         </div>
     {:else}
-        <div class="queue-list similar-list">
+        <div class="queue-list similar-list" in:fade={{ duration: 150 }}>
             {#if $isFetchingSimilar}
                 <div class="msg">Loading similar tracks...</div>
             {:else if $similarTracks.length === 0}
@@ -192,13 +193,13 @@
     }
 
     .header {
-        padding: 16px;
+        padding: 0 16px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid var(--border-subtle);
         flex-shrink: 0;
-        min-height: 56px;
+        height: 60px;
     }
 
     .header h3 {

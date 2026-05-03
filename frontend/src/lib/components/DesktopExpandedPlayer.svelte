@@ -170,8 +170,11 @@
     }
 
     .expanded-similar-header {
-        padding: 40px 24px 24px;
-        font-size: 18px;
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        height: 60px;
+        font-size: 16px;
         font-weight: 700;
         border-bottom: 1px solid var(--border-subtle);
         flex-shrink: 0;

@@ -433,71 +433,71 @@
             </div>
         {/if}
     </div>
-
-    {#if showTrackInfo && $currentTrack}
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="track-info-panel" on:click|stopPropagation>
-            <div class="info-header">
-                <span class="info-title">Track Info</span>
-                <span class="provider-badge">{providerLabel($currentTrack.id)}</span>
-                <button class="icon-btn info-close" on:click|stopPropagation={() => showTrackInfo = false}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="info-rows">
-                <div class="info-row">
-                    <span class="info-label">Title</span>
-                    <span class="info-value">{$currentTrack.title}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Artist</span>
-                    <span class="info-value">{$currentTrack.artist}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Track ID</span>
-                    <span class="info-value mono">{$currentTrack.id}</span>
-                </div>
-                {#if $currentTrack.canonicalId}
-                    <div class="info-row">
-                        <span class="info-label">Canonical ID</span>
-                        <span class="info-value mono">{$currentTrack.canonicalId}</span>
-                    </div>
-                {/if}
-                {#if $currentTrack.durationMs}
-                    <div class="info-row">
-                        <span class="info-label">Duration</span>
-                        <span class="info-value">{Math.floor($currentTrack.durationMs / 60000)}:{String(Math.floor(($currentTrack.durationMs % 60000) / 1000)).padStart(2, '0')}</span>
-                    </div>
-                {/if}
-                {#if $currentTrack.lastFmUrl}
-                    <div class="info-row">
-                        <span class="info-label">Last.fm</span>
-                        <a class="info-value info-link" href={$currentTrack.lastFmUrl} target="_blank" rel="noopener noreferrer"
-                           on:click|stopPropagation>{$currentTrack.lastFmUrl}</a>
-                    </div>
-                {/if}
-                {#if $currentTrack.streamUrl}
-                    <div class="info-row">
-                        <span class="info-label">Stream</span>
-                        <a class="info-value info-link" href={$currentTrack.streamUrl} target="_blank" rel="noopener noreferrer"
-                           on:click|stopPropagation>{providerLabel($currentTrack.id)}</a>
-                    </div>
-                {/if}
-                {#if $currentTrack.artworkUrl}
-                    <div class="info-row">
-                        <span class="info-label">Artwork</span>
-                        <a class="info-value info-link mono" href={$currentTrack.artworkUrl} target="_blank" rel="noopener noreferrer"
-                           on:click|stopPropagation>{$currentTrack.artworkUrl}</a>
-                    </div>
-                {/if}
-            </div>
-        </div>
-    {/if}
 </div>
+
+{#if showTrackInfo && $currentTrack}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="track-info-panel" on:click|stopPropagation>
+        <div class="info-header">
+            <span class="info-title">Track Info</span>
+            <span class="provider-badge">{providerLabel($currentTrack.id)}</span>
+            <button class="icon-btn info-close" on:click|stopPropagation={() => showTrackInfo = false}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="info-rows">
+            <div class="info-row">
+                <span class="info-label">Title</span>
+                <span class="info-value">{$currentTrack.title}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Artist</span>
+                <span class="info-value">{$currentTrack.artist}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Track ID</span>
+                <span class="info-value mono">{$currentTrack.id}</span>
+            </div>
+            {#if $currentTrack.canonicalId}
+                <div class="info-row">
+                    <span class="info-label">Canonical ID</span>
+                    <span class="info-value mono">{$currentTrack.canonicalId}</span>
+                </div>
+            {/if}
+            {#if $currentTrack.durationMs}
+                <div class="info-row">
+                    <span class="info-label">Duration</span>
+                    <span class="info-value">{Math.floor($currentTrack.durationMs / 60000)}:{String(Math.floor(($currentTrack.durationMs % 60000) / 1000)).padStart(2, '0')}</span>
+                </div>
+            {/if}
+            {#if $currentTrack.lastFmUrl}
+                <div class="info-row">
+                    <span class="info-label">Last.fm</span>
+                    <a class="info-value info-link" href={$currentTrack.lastFmUrl} target="_blank" rel="noopener noreferrer"
+                       on:click|stopPropagation>{$currentTrack.lastFmUrl}</a>
+                </div>
+            {/if}
+            {#if $currentTrack.streamUrl}
+                <div class="info-row">
+                    <span class="info-label">Stream</span>
+                    <a class="info-value info-link" href={$currentTrack.streamUrl} target="_blank" rel="noopener noreferrer"
+                       on:click|stopPropagation>{providerLabel($currentTrack.id)}</a>
+                </div>
+            {/if}
+            {#if $currentTrack.artworkUrl}
+                <div class="info-row">
+                    <span class="info-label">Artwork</span>
+                    <a class="info-value info-link mono" href={$currentTrack.artworkUrl} target="_blank" rel="noopener noreferrer"
+                       on:click|stopPropagation>{$currentTrack.artworkUrl}</a>
+                </div>
+            {/if}
+        </div>
+    </div>
+{/if}
 
 <style>
     .player-wrapper {
@@ -816,8 +816,8 @@
     }
 
     .track-info-panel {
-        position: absolute;
-        bottom: 100%;
+        position: fixed;
+        bottom: 90px;
         right: 0;
         width: 380px;
         background: var(--bg-elevated);
@@ -825,6 +825,7 @@
         border-radius: 8px 8px 0 0;
         padding: 16px;
         box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+        z-index: 600;
     }
 
     .info-header {
@@ -1340,7 +1341,7 @@
             right: 0;
             width: 100%;
             border-radius: 16px 16px 0 0;
-            z-index: 400;
+            z-index: 600;
             max-height: 70dvh;
             overflow-y: auto;
         }
