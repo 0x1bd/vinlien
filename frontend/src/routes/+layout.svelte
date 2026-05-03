@@ -411,10 +411,13 @@
         font-size: 14px;
         padding: 12px 16px;
         border-radius: 4px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .nav-btn:hover {
         color: var(--text-primary);
+        background: var(--bg-hover);
+        transform: translateX(4px);
     }
 
     .nav-btn.active {
@@ -479,10 +482,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
         border-radius: 4px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .pl-item:hover {
         color: var(--text-primary);
+        background: var(--bg-hover);
+        transform: translateX(4px);
     }
 
     .pl-item.active {
