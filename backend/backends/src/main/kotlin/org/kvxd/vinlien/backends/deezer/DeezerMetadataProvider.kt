@@ -132,6 +132,7 @@ class DeezerMetadataProvider : MusicProvider {
         Capability.ALBUM_SEARCH,
         Capability.ARTIST_INFO,
         Capability.ARTIST_ALBUMS,
+        Capability.ARTIST_TOP_TRACKS,
         Capability.ALBUM_TRACKS,
         Capability.RECOMMENDATIONS,
         Capability.TRENDING
@@ -254,6 +255,22 @@ class DeezerMetadataProvider : MusicProvider {
             albums
         } catch (e: Exception) {
             BackendDebugger.logError(id, "ARTIST_ALBUMS", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun getArtistTopTracks(artist: String): List<Track> = withContext(Dispatchers.IO) {
+        try {
+            val artistId = findArtistId(artist) ?: return@withContext emptyList()
+            val res = fetchParsed<DzrListResponse<DzrTrack>>(
+                apiUrl("artist/$artistId/top", "limit" to "50"),
+                "ARTIST_TOP_TRACKS"
+            )
+            val tracks = res.data.mapNotNull { it.toDomainTrack() }
+            BackendDebugger.logResponse(id, "ARTIST_TOP_TRACKS", tracks.size, "")
+            tracks
+        } catch (e: Exception) {
+            BackendDebugger.logError(id, "ARTIST_TOP_TRACKS", e)
             emptyList()
         }
     }

@@ -26,6 +26,7 @@ private data class LfmResponse(
     val results: LfmResults? = null,
     val similartracks: LfmWrapper? = null,
     val tracks: LfmWrapper? = null,
+    val toptracks: LfmTopTracksWrapper? = null,
     val album: LfmAlbum? = null,
     val artist: LfmArtistData? = null,
     val track: LfmTrackInfo? = null,
@@ -34,6 +35,9 @@ private data class LfmResponse(
 
 @Serializable
 private data class LfmTopAlbumsWrapper(val album: JsonElement? = null)
+
+@Serializable
+private data class LfmTopTracksWrapper(val track: JsonElement? = null)
 
 @Serializable
 private data class LfmTopAlbumItem(
@@ -151,6 +155,7 @@ class LastFmMetadataProvider(
         Capability.ALBUM_SEARCH,
         Capability.ARTIST_INFO,
         Capability.ARTIST_ALBUMS,
+        Capability.ARTIST_TOP_TRACKS,
         Capability.ALBUM_TRACKS,
         Capability.RECOMMENDATIONS,
         Capability.TRENDING
@@ -316,6 +321,17 @@ class LastFmMetadataProvider(
                     artworkUrl = artworkUrl
                 )
             }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    override suspend fun getArtistTopTracks(artist: String): List<Track> = withContext(Dispatchers.IO) {
+        try {
+            val res = fetchParsed(
+                apiUrl("artist.gettoptracks", "artist" to artist, "autocorrect" to "1", "limit" to "50")
+            )
+            res.toptracks?.track.parseLfmList<LfmTrack>().mapNotNull { it.toTrack(fallbackArtist = artist) }
         } catch (e: Exception) {
             emptyList()
         }

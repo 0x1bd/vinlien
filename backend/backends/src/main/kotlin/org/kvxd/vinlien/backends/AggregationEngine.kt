@@ -138,6 +138,12 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         return deduplicateAlbumVariants(dedup)
     }
 
+    suspend fun getArtistTopTracks(artist: String): List<Track> {
+        val raw = parallelQuery(Capability.ARTIST_TOP_TRACKS) { it.getArtistTopTracks(artist) }.flatten()
+        return TrackMerger.merge(raw.map { Normalizer.normalizeTrack(it) })
+            .sortedByDescending { it.popularityScore ?: 0.0 }
+    }
+
     private fun deduplicateAlbumVariants(albums: List<Album>): List<Album> {
         if (albums.size <= 1) return albums
         val normKeys = albums.map { albumNormKey(it.title) }

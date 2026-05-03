@@ -5,7 +5,7 @@ import org.kvxd.vinlien.shared.models.media.ArtistInfo
 import org.kvxd.vinlien.shared.models.media.Track
 
 private fun String.primaryArtistPart(): String =
-    split(Regex("""[\s]*[&,][\s]*|[\s]+(feat|ft|featuring)\.?\s+""", RegexOption.IGNORE_CASE))
+    split(Regex("""[\s]*[&,][\s]*|[\s]+(?<![a-zA-Z])(feat|ft|featuring)\.?\s+""", RegexOption.IGNORE_CASE))
         .firstOrNull()?.normalized() ?: normalized()
 
 object TrackMerger {

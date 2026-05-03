@@ -9,6 +9,7 @@ enum class Capability {
     ALBUM_SEARCH,
     ARTIST_INFO,
     ARTIST_ALBUMS,
+    ARTIST_TOP_TRACKS,
     ALBUM_TRACKS,
     RECOMMENDATIONS,
     TRENDING,
@@ -27,6 +28,7 @@ interface MusicProvider {
     suspend fun getAlbum(artist: String, albumTitle: String): Album? = null
 
     suspend fun getArtistAlbums(artist: String): List<Album> = emptyList()
+    suspend fun getArtistTopTracks(artist: String): List<Track> = emptyList()
     suspend fun getArtistInfo(name: String): ArtistInfo? = null
     suspend fun getRecommendations(track: Track): List<Track> = emptyList()
     suspend fun getTrending(): List<Track> = emptyList()
