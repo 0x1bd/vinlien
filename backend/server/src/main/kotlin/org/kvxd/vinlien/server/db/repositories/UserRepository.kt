@@ -2,8 +2,8 @@ package org.kvxd.vinlien.server.db.repositories
 
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
+import org.kvxd.vinlien.server.db.*
 import org.kvxd.vinlien.server.db.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.db.Users
 import org.kvxd.vinlien.shared.models.auth.User
 import java.util.UUID
 
@@ -59,5 +59,13 @@ object UserRepository {
 
     suspend fun isAdmin(username: String): Boolean = dbQuery {
         Users.selectAll().where { (Users.username eq username) and (Users.role eq "ADMIN") }.count() > 0
+    }
+
+    suspend fun deleteUserData(userId: String) = dbQuery {
+        History.deleteWhere { History.userId eq userId }
+        SkipEvents.deleteWhere { SkipEvents.userId eq userId }
+        PlayEvents.deleteWhere { PlayEvents.userId eq userId }
+        TasteCapsules.deleteWhere { TasteCapsules.userId eq userId }
+        Playlists.deleteWhere { Playlists.userId eq userId }
     }
 }

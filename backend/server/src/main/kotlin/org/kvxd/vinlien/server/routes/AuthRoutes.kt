@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 import org.kvxd.vinlien.server.Config
 import org.kvxd.vinlien.server.db.Users
 import org.kvxd.vinlien.server.db.repositories.UserRepository
+import org.kvxd.vinlien.server.getUserId
 import org.kvxd.vinlien.server.getUsername
 import org.kvxd.vinlien.shared.models.auth.ChangePasswordReq
 import org.kvxd.vinlien.shared.models.auth.User
@@ -65,6 +66,12 @@ fun Route.authRoutes(secret: String) {
             val username = call.getUsername() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val req = call.receive<ChangePasswordReq>()
             UserRepository.updatePasswordByUsername(username, BCrypt.hashpw(req.newPassword, BCrypt.gensalt()))
+            call.respond(HttpStatusCode.OK)
+        }
+
+        post("/api/auth/delete-data") {
+            val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
+            UserRepository.deleteUserData(userId)
             call.respond(HttpStatusCode.OK)
         }
     }
