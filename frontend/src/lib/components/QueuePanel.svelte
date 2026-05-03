@@ -330,6 +330,7 @@
             bottom: 0;
             top: 0;
             height: 100dvh;
+            z-index: 600;
         }
 
         .header h3, .tabs button {
