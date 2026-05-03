@@ -206,66 +206,6 @@
             isDisliked = prevDisliked;
         }
     }
-    let showVersions = false;
-    let versions: Array<{id: string; title: string; artist: string; durationMs: number; artworkUrl: string | null}> = [];
-    let versionsLoading = false;
-    let versionsTrackId: string | null = null;
-    let activeVersionId: string | null = null;
-
-    function formatDuration(ms: number): string {
-        if (!ms) return '';
-        const s = Math.floor(ms / 1000);
-        const m = Math.floor(s / 60);
-        const sec = String(s % 60).padStart(2, '0');
-        return `${m}:${sec}`;
-    }
-
-    async function openVersions() {
-        if (!$currentTrack) return;
-        showVersions = !showVersions;
-        showTrackInfo = false;
-        if (!showVersions) return;
-        if (versionsTrackId === $currentTrack.id && versions.length > 0) return;
-        versionsTrackId = $currentTrack.id;
-        versionsLoading = true;
-        versions = [];
-        activeVersionId = null;
-        try {
-            const params = new URLSearchParams({
-                artist: $currentTrack.artist,
-                title: $currentTrack.title,
-                durationMs: String($currentTrack.durationMs)
-            });
-            const res = await apiRequest(`/api/versions?${params}`);
-            versions = res ?? [];
-        } catch {
-            versions = [];
-        } finally {
-            versionsLoading = false;
-        }
-    }
-
-    function playVersion(v: {id: string; title: string; artist: string; durationMs: number}) {
-        if (!$currentTrack) return;
-        activeVersionId = v.id;
-        const params = new URLSearchParams({
-            id: v.id,
-            title: $currentTrack.title,
-            artist: $currentTrack.artist,
-            durationMs: String(v.durationMs || $currentTrack.durationMs)
-        });
-        const streamSrc = `/api/stream?${params}`;
-        const audio = document.querySelector('audio') as HTMLAudioElement | null;
-        if (!audio) return;
-        audio.src = streamSrc;
-        audio.load();
-        audio.play().catch(() => {});
-    }
-
-    $: if ($currentTrack?.id) {
-        showVersions = false;
-        activeVersionId = null;
-    }
 </script>
 
 <svelte:window bind:innerWidth />
@@ -471,14 +411,6 @@
                                 </svg>
                             </button>
                         {/if}
-                        <button class="action-btn action-versions" class:active={showVersions}
-                                on:click|stopPropagation={openVersions}
-                                title="Play a version">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"/>
-                                <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
-                            </svg>
-                        </button>
                         <button class="action-btn action-info" class:active={showTrackInfo}
                                 on:click|stopPropagation={() => { showTrackInfo = !showTrackInfo; $showQueuePanel = false; }}
                                 title="Track info">
@@ -501,52 +433,6 @@
             </div>
         {/if}
     </div>
-
-    {#if showVersions && $currentTrack}
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="track-info-panel versions-panel" on:click|stopPropagation>
-            <div class="info-header">
-                <span class="info-title">Versions</span>
-                <span class="provider-badge">YouTube</span>
-                <button class="icon-btn info-close" on:click|stopPropagation={() => showVersions = false}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-
-            {#if versionsLoading}
-                <div class="versions-loading">
-                    <div class="versions-spinner"></div>
-                    <span>Finding versions…</span>
-                </div>
-            {:else if versions.length === 0}
-                <div class="versions-empty">No versions found</div>
-            {:else}
-                <div class="versions-list">
-                    {#each versions as v (v.id)}
-                        <!-- svelte-ignore a11y-click-events-have-key-events -->
-                        <!-- svelte-ignore a11y-no-static-element-interactions -->
-                        <div class="version-item" class:active={activeVersionId === v.id}
-                             on:click|stopPropagation={() => playVersion(v)}>
-                            <img class="version-thumb" src={v.artworkUrl ?? `https://i.ytimg.com/vi/${v.id}/default.jpg`} alt="" loading="lazy"/>
-                            <div class="version-meta">
-                                <span class="version-title">{v.title}</span>
-                                <span class="version-sub">{v.artist}{v.durationMs ? ` · ${formatDuration(v.durationMs)}` : ''}</span>
-                            </div>
-                            {#if activeVersionId === v.id}
-                                <svg class="version-playing-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            {/if}
-                        </div>
-                    {/each}
-                </div>
-            {/if}
-        </div>
-    {/if}
 
     {#if showTrackInfo && $currentTrack}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -1457,122 +1343,6 @@
             z-index: 400;
             max-height: 70dvh;
             overflow-y: auto;
-        }
-    }
-    .versions-panel {
-        width: 420px;
-        z-index: 600;
-    }
-
-    .versions-loading {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 0;
-        color: var(--text-secondary);
-        font-size: 13px;
-    }
-
-    .versions-spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid var(--border-subtle);
-        border-top-color: var(--accent-color);
-        border-radius: 50%;
-        animation: spin 0.7s linear infinite;
-        flex-shrink: 0;
-    }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
-    .versions-empty {
-        padding: 12px 0;
-        color: var(--text-secondary);
-        font-size: 13px;
-        text-align: center;
-    }
-
-    .versions-list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        max-height: 360px;
-        overflow-y: auto;
-        padding-right: 2px;
-    }
-
-    .versions-list::-webkit-scrollbar {
-        width: 4px;
-    }
-    .versions-list::-webkit-scrollbar-track { background: transparent; }
-    .versions-list::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
-
-    .version-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 7px 8px;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: background 0.15s;
-    }
-
-    .version-item:hover {
-        background: var(--bg-hover);
-    }
-
-    .version-item.active {
-        background: color-mix(in srgb, var(--accent-color) 12%, transparent);
-    }
-
-    .version-item.active .version-title {
-        color: var(--accent-color);
-    }
-
-    .version-thumb {
-        width: 52px;
-        height: 36px;
-        object-fit: cover;
-        border-radius: 4px;
-        flex-shrink: 0;
-        background: var(--bg-hover);
-    }
-
-    .version-meta {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        flex: 1;
-        min-width: 0;
-    }
-
-    .version-title {
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--text-primary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .version-sub {
-        font-size: 11px;
-        color: var(--text-secondary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .version-playing-icon {
-        color: var(--accent-color);
-        flex-shrink: 0;
-    }
-
-    @media (max-width: 600px) {
-        .versions-panel {
-            width: 100%;
         }
     }
 </style>

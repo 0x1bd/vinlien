@@ -97,39 +97,6 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
 
     override suspend fun searchAudio(query: String): List<Track> = search(query)
 
-    suspend fun searchVersions(artist: String, title: String, durationMs: Long): List<Track> =
-        withContext(Dispatchers.IO) {
-            val query = title
-            val allResults = search(query)
-            
-            val minMs = if (durationMs > 0) (durationMs * 0.4).toLong() else 0L
-            val maxMs = if (durationMs > 0) (durationMs * 2.5).toLong() else MAX_TRACK_DURATION_MS
-            val titleLower = title.lowercase()
-            val artistLower = artist.lowercase()
-            
-            val filtered = allResults.filter { t ->
-                val tl = t.title.lowercase()
-                val al = t.artist.lowercase()
-                
-                val durOk = t.durationMs == 0L || (t.durationMs in minMs..maxMs)
-                
-                val titleMatch = tl.contains(titleLower) ||
-                    titleLower.split(" ").filter { it.length > 3 }.all { tl.contains(it) }
-                
-                val artistMatch = al.contains(artistLower) || tl.contains(artistLower) ||
-                    artistLower.split(" ").any { it.length > 3 && (al.contains(it) || tl.contains(it)) }
-
-                durOk && titleMatch && artistMatch
-            }
-
-            filtered.distinctBy { t ->
-                t.title.lowercase()
-                    .replace(Regex("[^a-z0-9 ]"), "")
-                    .replace(Regex("\\s+"), " ")
-                    .trim()
-            }.take(20)
-        }
-
     override suspend fun resolveStream(track: Track): String? = withContext(Dispatchers.IO) {
         try {
             when {

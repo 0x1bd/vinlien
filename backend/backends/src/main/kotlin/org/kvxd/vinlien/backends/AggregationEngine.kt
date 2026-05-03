@@ -9,15 +9,14 @@ import org.kvxd.vinlien.shared.models.media.Track
 import kotlin.math.ln
 
 private val VERSION_WORDS = setOf(
-    "acoustic", "live", "instrumental", "karaoke", "cover", "demo", "unplugged", "remix",
-    "slowed", "sped", "nightcore", "reverb", "lofi", "mashup"
+    "acoustic", "live", "instrumental", "karaoke", "cover", "demo", "unplugged", "remix"
 )
 
 private val ALBUM_QUALIFIER_WORDS = setOf(
     "official", "original", "deluxe", "special", "extended", "limited", "edition", "remastered", "remaster", "feat"
 )
 
-class AggregationEngine(val providers: List<MusicProvider>) {
+class AggregationEngine(private val providers: List<MusicProvider>) {
 
     init {
         BackendDebugger.logProviders(providers)

@@ -9,7 +9,6 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
 import org.kvxd.vinlien.backends.AggregationEngine
-import org.kvxd.vinlien.backends.invidious.LocalInvidiousBackend
 import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -76,20 +75,5 @@ fun Route.streamRoutes(engine: AggregationEngine) {
                 call.respond(HttpStatusCode.NotFound)
             }
         }
-    }
-
-    get("/api/versions") {
-        val artist = call.request.queryParameters["artist"] ?: ""
-        val title = call.request.queryParameters["title"] ?: ""
-        val durationMs = call.request.queryParameters["durationMs"]?.toLongOrNull() ?: 0L
-        if (title.isBlank()) return@get call.respond(HttpStatusCode.BadRequest)
-
-        val invidious = engine.providers.filterIsInstance<LocalInvidiousBackend>().firstOrNull()
-        if (invidious == null) {
-            call.respond(emptyList<Track>())
-            return@get
-        }
-        val versions = runCatching { invidious.searchVersions(artist, title, durationMs) }.getOrElse { emptyList() }
-        call.respond(versions)
     }
 }
