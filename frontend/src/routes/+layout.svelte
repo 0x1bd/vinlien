@@ -5,7 +5,7 @@
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
-    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, theme, isMuted, repeatMode, showQueuePanel, currentTrack, serverAvailable, autoDownloadPlaylists} from '$lib/utils/store';
+    import {user, userPlaylists, isSidebarOpen, queue, currentTrackIndex, isPlaying, isPlayerExpanded, theme, isMuted, repeatMode, showQueuePanel, currentTrack, serverAvailable, autoDownloadPlaylists, requireOnline, fetchSimilarTracksIfNeeded} from '$lib/utils/store';
     import {downloadPlaylistAudio} from '$lib/utils/offlineAudio';
     import {applyTheme} from '$lib/utils/themes';
     import {get} from 'svelte/store';
@@ -181,14 +181,14 @@
 
             <nav>
                 {#if $serverAvailable}
-                    <a href="/" class="nav-btn" class:active={$page.url.pathname === '/'}>
+                    <a href="/" class="nav-btn" class:active={$page.url.pathname === '/'} on:click={() => $isPlayerExpanded = false}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                         </svg>
                         Home
                     </a>
                 {/if}
-                <a href="/settings" class="nav-btn" class:active={$page.url.pathname === '/settings'}>
+                <a href="/settings" class="nav-btn" class:active={$page.url.pathname === '/settings'} on:click={() => $isPlayerExpanded = false}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"></circle>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -196,7 +196,7 @@
                     Settings
                 </a>
                 {#if $serverAvailable && $user.role === 'ADMIN'}
-                    <a href="/admin" class="nav-btn" class:active={$page.url.pathname === '/admin'}>
+                    <a href="/admin" class="nav-btn" class:active={$page.url.pathname === '/admin'} on:click={() => $isPlayerExpanded = false}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              stroke-width="2">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -212,7 +212,7 @@
 
             <div class="sidebar-playlists">
                 <div class="playlists-header">
-                    <a href="/library" class="library-heading" class:active={$page.url.pathname === '/library'}>Your Library</a>
+                    <a href="/library" class="library-heading" class:active={$page.url.pathname === '/library'} on:click={() => $isPlayerExpanded = false}>Your Library</a>
                     {#if $serverAvailable}
                         <button class="add-pl-btn" on:click={startCreatePlaylist}>+</button>
                     {/if}
@@ -222,6 +222,7 @@
                         <a href="/playlist/{pl.id}" class="pl-item"
                            class:active={$page.url.pathname === `/playlist/${pl.id}`}
                            class:drag-over={dragOverId === pl.id}
+                           on:click={() => $isPlayerExpanded = false}
                            on:dragover|preventDefault
                            on:dragenter={() => { if ($serverAvailable) dragOverId = pl.id; }}
                            on:dragleave={() => dragOverId = null}
@@ -283,7 +284,7 @@
 
         <nav class="mobile-bottom-nav">
             {#if $serverAvailable}
-                <a href="/" class="mobile-nav-btn" class:active={$page.url.pathname === '/'}>
+                <a href="/" class="mobile-nav-btn" class:active={$page.url.pathname === '/'} on:click={() => $isPlayerExpanded = false}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                     </svg>
@@ -291,7 +292,7 @@
                 </a>
             {/if}
 
-            <a href="/library" class="mobile-nav-btn" class:active={$page.url.pathname.startsWith('/library')}>
+            <a href="/library" class="mobile-nav-btn" class:active={$page.url.pathname.startsWith('/library')} on:click={() => $isPlayerExpanded = false}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="8" y1="6" x2="21" y2="6"></line>
                     <line x1="8" y1="12" x2="21" y2="12"></line>
@@ -303,7 +304,7 @@
                 <span>Library</span>
             </a>
 
-            <a href="/settings" class="mobile-nav-btn" class:active={$page.url.pathname === '/settings'}>
+            <a href="/settings" class="mobile-nav-btn" class:active={$page.url.pathname === '/settings'} on:click={() => $isPlayerExpanded = false}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>

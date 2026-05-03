@@ -44,6 +44,7 @@ export const isSidebarOpen = writable(true);
 export const queue = writable<Track[]>([]);
 export const currentTrackIndex = writable(-1);
 export const isPlaying = writable(false);
+export const isPlayerExpanded = writable(false);
 
 export const volume = createPersistedStore<number>('vinlien_volume', 1);
 export const isMuted = createPersistedStore<boolean>('vinlien_muted', false);

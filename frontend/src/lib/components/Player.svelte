@@ -12,7 +12,8 @@
         showQueuePanel,
         autoDownloadPlaylists,
         requireOnline,
-        fetchSimilarTracksIfNeeded
+        fetchSimilarTracksIfNeeded,
+        isPlayerExpanded
     } from '$lib/utils/store';
     import {get} from 'svelte/store';
     import {onMount, tick} from 'svelte';
@@ -31,7 +32,8 @@
     $: isLiked = $currentTrack && likedPlaylist?.tracks.some(t => t.id === $currentTrack.id);
     $: isDisliked = $currentTrack && dislikedPlaylist?.tracks.some(t => t.id === $currentTrack.id);
 
-    let isExpanded = false;
+
+
     let touchStartY = 0;
     let showTrackInfo = false;
     let innerWidth = 0;
@@ -51,7 +53,7 @@
 
     function updateMobileOverflowState() {
         if (!browser || !$currentTrack) return;
-        if (isExpanded) {
+        if ($isPlayerExpanded) {
             isMobileTitleOverflowing = false;
             mobileTitleShiftPx = 0;
             return;
@@ -72,23 +74,23 @@
 
     $: if (browser) {
         $currentTrack;
-        isExpanded;
+        $isPlayerExpanded;
         void tick().then(updateMobileOverflowState);
     }
 
-    $: if (!$currentTrack && isExpanded) {
-        isExpanded = false;
+    $: if (!$currentTrack && $isPlayerExpanded) {
+        $isPlayerExpanded = false;
     }
 
     $: if (browser) {
         const pathname = page.url.pathname;
-        if (lastPathname && pathname !== lastPathname && isExpanded) {
-            isExpanded = false;
+        if (lastPathname && pathname !== lastPathname && $isPlayerExpanded) {
+            $isPlayerExpanded = false;
         }
         lastPathname = pathname;
     }
 
-    $: if (isExpanded && $currentTrack) {
+    $: if ($isPlayerExpanded && $currentTrack) {
         fetchSimilarTracksIfNeeded($currentTrack);
     }
 
@@ -130,16 +132,16 @@
     }
 
     function handleTouchStart(e: TouchEvent) {
-        if (isExpanded) {
+        if ($isPlayerExpanded) {
             touchStartY = e.touches[0].clientY;
         }
     }
 
     function handleTouchEnd(e: TouchEvent) {
-        if (isExpanded) {
+        if ($isPlayerExpanded) {
             const touchEndY = e.changedTouches[0].clientY;
             if (touchEndY - touchStartY > 80) {
-                isExpanded = false;
+                $isPlayerExpanded = false;
             }
         }
     }
@@ -150,12 +152,13 @@
         if ((e.target as Element).closest('button') ||
             (e.target as Element).closest('.progress-hitbox') ||
             (e.target as Element).closest('.expanded-header') ||
-            (e.target as Element).closest('.track-info-panel')) {
+            (e.target as Element).closest('.track-info-panel') ||
+            (e.target as Element).closest('.actions')) {
             return;
         }
 
-        if (!isExpanded || innerWidth > 600) {
-            isExpanded = !isExpanded;
+        if (!$isPlayerExpanded || innerWidth > 600) {
+            $isPlayerExpanded = !$isPlayerExpanded;
         }
     }
 
@@ -207,15 +210,15 @@
 
 <svelte:window bind:innerWidth />
 
-{#if !isExpanded}
+{#if !$isPlayerExpanded}
     <QueuePanel/>
 {/if}
 
-{#if isExpanded && innerWidth > 600}
+{#if $isPlayerExpanded && innerWidth > 600}
     <DesktopExpandedPlayer />
 {/if}
 
-<div class="player-wrapper" class:expanded={isExpanded && innerWidth <= 600}>
+<div class="player-wrapper" class:expanded={$isPlayerExpanded && innerWidth <= 600}>
 
     <div class="player-layout">
         <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -227,9 +230,9 @@
              role="presentation"
         >
             {#if $currentTrack}
-                {#if isExpanded}
+                {#if $isPlayerExpanded}
                     <div class="expanded-header">
-                        <button class="icon-btn collapse-btn" on:click|stopPropagation={() => isExpanded = false}>
+                        <button class="icon-btn collapse-btn" on:click|stopPropagation={() => $isPlayerExpanded = false}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  stroke-width="2">
                                 <polyline points="6 9 12 15 18 9"></polyline>
@@ -262,15 +265,15 @@
                                 </div>
                                 <div class="artist">
                                     {#if $currentTrack.artists.length > 0}
-                                        {#each $currentTrack.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => { isExpanded = false; goto(`/artist/${encodeURIComponent(name)}`); }}>{name}</span>{#if i < $currentTrack.artists.length - 1}{' & '}{/if}{/each}
-                                    {:else}
-                                        <span>{$currentTrack.artist}</span>
-                                    {/if}
-                                </div>
-                                {#if $currentTrack.albumTitle}
-                                    <div class="album">
-                                        {#if $currentTrack.albumTitle}
-                                            <button class="album-link" on:click|stopPropagation={() => { isExpanded = false; goto(`/album/${encodeURIComponent($currentTrack.artist)}/${encodeURIComponent($currentTrack.albumTitle)}`); }}>{$currentTrack.albumTitle}</button>
+                                      {#each $currentTrack.artists as name, i}<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions --><span class="artist-link" on:click|stopPropagation={() => { $isPlayerExpanded = false; goto(`/artist/${encodeURIComponent(name)}`); }}>{name}</span>{#if i < $currentTrack.artists.length - 1}{' & '}{/if}{/each}
+                                {:else}
+                                    <span>{$currentTrack.artist}</span>
+                                {/if}
+                            </div>
+                            {#if $currentTrack.albumTitle}
+                                <div class="album">
+                                    {#if $currentTrack.albumTitle}
+                                        <button class="album-link" on:click|stopPropagation={() => { $isPlayerExpanded = false; goto(`/album/${encodeURIComponent($currentTrack.artist)}/${encodeURIComponent($currentTrack.albumTitle)}`); }}>{$currentTrack.albumTitle}</button>
                                         {:else}
                                             <span>{$currentTrack.albumTitle}</span>
                                         {/if}
@@ -324,7 +327,7 @@
                         </div>
                     </div>
 
-                    {#if isExpanded}
+                    {#if $isPlayerExpanded}
                         <div class="expanded-time">
                             <span>{$currentTimeDisplay}</span>
                             <span>{$durationDisplay}</span>
@@ -397,7 +400,7 @@
                             <input type="range" class="volume-slider action-vol" min="0" max="1" step="0.01"
                                    bind:value={$volume} on:click|stopPropagation/>
                         {/if}
-                        {#if !(isExpanded && innerWidth > 600)}
+                        {#if !($isPlayerExpanded && innerWidth > 600)}
                             <button class="action-btn action-queue" class:active={$showQueuePanel}
                                     on:click|stopPropagation={() => { $showQueuePanel = !$showQueuePanel; }}>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -424,7 +427,7 @@
                 <div class="idle-text">Pick a track to start listening</div>
             {/if}
         </div>
-        {#if isExpanded && innerWidth <= 600}
+        {#if $isPlayerExpanded && innerWidth <= 600}
             <div class="expanded-queue-pane">
                 <QueuePanel inline={true} />
             </div>
