@@ -4,17 +4,17 @@ import org.kvxd.vinlien.shared.models.media.Album
 import org.kvxd.vinlien.shared.models.media.Track
 
 private val PRIMARY_ARTIST_SPLIT = Regex(
-    """[\s]*[&,][\s]*|[\s]+(feat|ft|featuring)\.?\s+""",
+    """[\s]*[&,][\s]*|[\s]+(?<![a-zA-Z])(feat|ft|featuring)\.?\s+""",
     RegexOption.IGNORE_CASE
 )
 
 private val ARTIST_COLLABORATION_SPLIT = Regex(
-    """[\s]*(?:feat|ft|featuring)\.?\s+|[\s]*[,&][\s]*""",
+    """[\s]*(?<![a-zA-Z])(?:feat|ft|featuring)\.?\s+|[\s]*[,&][\s]*""",
     RegexOption.IGNORE_CASE
 )
 
 private val FEAT_IN_TITLE = Regex(
-    """[\s\-]*[\[(]?\s*(?:feat|ft|featuring)\.?\s+([^()\[\]\r\n]+?)[\])]?\s*$""",
+    """[\s\-]*[\[(]?\s*(?<![a-zA-Z])(?:feat|ft|featuring)\.?\s+([^()\[\]\r\n]+?)[\])]?\s*$""",
     setOf(RegexOption.IGNORE_CASE)
 )
 
@@ -29,7 +29,7 @@ internal fun String.normalized() =
 internal fun String.withoutSpaces() = replace(" ", "")
 
 internal fun String.withoutFeaturedArtists() =
-    replace(Regex("""\s*(feat|ft|featuring)\.?\s+.*""", RegexOption.IGNORE_CASE), "").trim()
+    replace(Regex("""\s*(?<![a-zA-Z])(feat|ft|featuring)\.?\s+.*""", RegexOption.IGNORE_CASE), "").trim()
 
 internal fun normalizeArtistName(artist: String) = artist.normalized().withoutFeaturedArtists()
 
