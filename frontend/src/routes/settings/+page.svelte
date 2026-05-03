@@ -2,6 +2,7 @@
     import {showVolumeSlider, theme, useRecommendations, continuePlaylist} from '$lib/utils/store';
     import {KEYBINDS} from '$lib/utils/keybinds';
     import {themes} from '$lib/utils/themes';
+    import {apiRequest} from '$lib/utils/api';
 
     let isDeleting = false;
     let deleteMessage = '';
@@ -15,20 +16,17 @@
         deleteMessage = '';
 
         try {
-            const res = await fetch('/api/auth/delete-data', {
-                method: 'POST'
-            });
-
-            if (res.ok) {
-                deleteMessage = 'Your data has been deleted successfully.';
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
+            await apiRequest('/api/auth/delete-data', { method: 'POST' });
+            deleteMessage = 'Your data has been deleted successfully.';
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } catch (e: unknown) {
+            if (e instanceof Error) {
+                deleteMessage = 'Failed to delete data: ' + e.message;
             } else {
-                deleteMessage = 'Failed to delete data: ' + await res.text();
+                deleteMessage = 'An error occurred while deleting data.';
             }
-        } catch (e) {
-            deleteMessage = 'An error occurred while deleting data.';
         } finally {
             isDeleting = false;
         }
