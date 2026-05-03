@@ -151,14 +151,8 @@ class LastFmMetadataProvider(
     override val id = "lastfm"
     override val name = "Last.fm"
     override val capabilities = setOf(
-        Capability.TRACK_SEARCH,
-        Capability.ALBUM_SEARCH,
         Capability.ARTIST_INFO,
-        Capability.ARTIST_ALBUMS,
-        Capability.ARTIST_TOP_TRACKS,
-        Capability.ALBUM_TRACKS,
-        Capability.RECOMMENDATIONS,
-        Capability.TRENDING
+        Capability.ARTIST_TOP_TRACKS
     )
 
     private fun apiUrl(method: String, vararg params: Pair<String, String>): String {
