@@ -2,7 +2,7 @@
 appcompat = "1.7.1"
 constraintlayout = "2.2.1"
 coreKtx = "1.18.0"
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 ktor = "3.4.3"
 logback = "1.5.32"
 coroutines = "1.10.2"
