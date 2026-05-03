@@ -5,8 +5,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import org.kvxd.vinlien.server.db.repositories.PlaylistRepository
 import org.kvxd.vinlien.server.getUserId
-import org.kvxd.vinlien.server.services.PlaylistService
 import org.kvxd.vinlien.shared.models.media.Track
 
 @Serializable
@@ -19,61 +19,61 @@ fun Route.playlistRoutes() {
     route("/api/playlists") {
         get {
             val userId = call.getUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized)
-            call.respond(PlaylistService.getForUser(userId))
+            call.respond(PlaylistRepository.getForUser(userId))
         }
 
         post {
             val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val req = call.receive<PlaylistCreateReq>()
-            call.respond(PlaylistService.create(userId, req.name))
+            call.respond(PlaylistRepository.create(userId, req.name))
         }
 
         put("/{id}/info") {
             val userId = call.getUserId() ?: return@put call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
-            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@put call.respond(HttpStatusCode.Forbidden)
+            if (!PlaylistRepository.ownsPlaylist(userId, playlistId)) return@put call.respond(HttpStatusCode.Forbidden)
             val req = call.receive<PlaylistEditReq>()
-            PlaylistService.updateInfo(playlistId, req.name, req.description, req.imageUrl)
+            PlaylistRepository.updateInfo(playlistId, req.name, req.description, req.imageUrl)
             call.respond(HttpStatusCode.OK)
         }
 
         post("/liked/toggle") {
             val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val track = call.receive<Track>()
-            PlaylistService.toggleTrack(userId, track, targetName = "Liked Songs", oppositeName = "Disliked Songs")
+            PlaylistRepository.toggleTrack(userId, track, targetName = "Liked Songs", oppositeName = "Disliked Songs")
             call.respond(HttpStatusCode.OK)
         }
 
         post("/disliked/toggle") {
             val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val track = call.receive<Track>()
-            PlaylistService.toggleTrack(userId, track, targetName = "Disliked Songs", oppositeName = "Liked Songs")
+            PlaylistRepository.toggleTrack(userId, track, targetName = "Disliked Songs", oppositeName = "Liked Songs")
             call.respond(HttpStatusCode.OK)
         }
 
         post("/{id}/tracks") {
             val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest)
-            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@post call.respond(HttpStatusCode.Forbidden)
+            if (!PlaylistRepository.ownsPlaylist(userId, playlistId)) return@post call.respond(HttpStatusCode.Forbidden)
             val track = call.receive<Track>()
-            PlaylistService.addTrack(playlistId, track)
+            PlaylistRepository.addTrack(playlistId, track)
             call.respond(HttpStatusCode.OK)
         }
 
         put("/{id}/tracks") {
             val userId = call.getUserId() ?: return@put call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
-            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@put call.respond(HttpStatusCode.Forbidden)
+            if (!PlaylistRepository.ownsPlaylist(userId, playlistId)) return@put call.respond(HttpStatusCode.Forbidden)
             val newTracks = call.receive<List<Track>>()
-            PlaylistService.replaceTracks(playlistId, newTracks)
+            PlaylistRepository.replaceTracks(playlistId, newTracks)
             call.respond(HttpStatusCode.OK)
         }
 
         delete("/{id}") {
             val userId = call.getUserId() ?: return@delete call.respond(HttpStatusCode.Unauthorized)
             val playlistId = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
-            if (!PlaylistService.ownsPlaylist(userId, playlistId)) return@delete call.respond(HttpStatusCode.Forbidden)
-            PlaylistService.delete(playlistId)
+            if (!PlaylistRepository.ownsPlaylist(userId, playlistId)) return@delete call.respond(HttpStatusCode.Forbidden)
+            PlaylistRepository.delete(playlistId)
             call.respond(HttpStatusCode.OK)
         }
     }

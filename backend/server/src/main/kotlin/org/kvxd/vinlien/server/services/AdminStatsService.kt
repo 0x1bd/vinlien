@@ -1,11 +1,9 @@
 package org.kvxd.vinlien.server.services
 
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.kvxd.vinlien.server.*
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
+import org.kvxd.vinlien.server.db.History
+import org.kvxd.vinlien.server.db.Tracks
+import org.kvxd.vinlien.server.db.repositories.StatsRepository
 import org.kvxd.vinlien.shared.models.admin.*
-import org.kvxd.vinlien.shared.models.auth.User
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -13,16 +11,14 @@ import java.time.format.DateTimeFormatter
 
 object AdminStatsService {
 
-    suspend fun computeStats(): AdminStatsResponse = dbQuery {
-        val pendingUsers = Users.selectAll()
-            .where { Users.role eq "PENDING" }
-            .map { User(it[Users.id], it[Users.username], it[Users.role]) }
-
-        val allHistoryRows = (History innerJoin Tracks).selectAll().toList()
+    suspend fun computeStats(): AdminStatsResponse {
+        val pendingUsers = StatsRepository.getPendingUsers()
+        val allHistoryRows = StatsRepository.getAllHistoryRows()
+        
         val totalPlays = allHistoryRows.size
         val uniqueTracks = allHistoryRows.distinctBy { it[History.trackId] }.size
 
-        val userNames = Users.selectAll().associate { it[Users.id] to it[Users.username] }
+        val userNames = StatsRepository.getUserNamesMap()
 
         val historyByUser = allHistoryRows.groupBy { it[History.userId] }
         var totalPlaytimeMs = 0L
@@ -81,7 +77,7 @@ object AdminStatsService {
 
         val avgPlaysPerUser = if (userNames.isNotEmpty()) totalPlays.toDouble() / userNames.size else 0.0
 
-        AdminStatsResponse(
+        return AdminStatsResponse(
             stats = AdminStats(
                 userNames.size, totalPlays, uniqueTracks, totalPlaytimeMs,
                 topUsers, topTracks, topArtists, playsLast7Days, peakHour, avgPlaysPerUser

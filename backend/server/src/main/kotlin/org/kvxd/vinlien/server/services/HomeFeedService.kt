@@ -1,24 +1,14 @@
 package org.kvxd.vinlien.server.services
 
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.DatabaseFactory.toTrack
-import org.kvxd.vinlien.server.History
 import org.kvxd.vinlien.server.TrackFingerprint
-import org.kvxd.vinlien.server.Tracks
+import org.kvxd.vinlien.server.db.repositories.HistoryRepository
 import org.kvxd.vinlien.shared.models.feed.HomeFeed
 import org.kvxd.vinlien.shared.models.media.Track
 
 object HomeFeedService {
 
-    suspend fun buildFeed(userId: String): HomeFeed = dbQuery {
-        val parsedTracks = (History innerJoin Tracks)
-            .selectAll()
-            .where { History.userId eq userId }
-            .orderBy(History.timestamp to SortOrder.DESC)
-            .limit(200)
-            .map { it.toTrack() }
+    suspend fun buildFeed(userId: String): HomeFeed {
+        val parsedTracks = HistoryRepository.getRecentHistory(userId, limit = 200).map { it.first }
 
         val tracksBySong = parsedTracks.groupBy { it.songKey() }
         val representativeTracks = tracksBySong.mapValues { (_, tracks) -> tracks.bestRepresentative() }
@@ -42,7 +32,7 @@ object HomeFeedService {
             .take(10)
         val artists = parsedTracks.flatMap { it.artists }.distinct().shuffled().take(3)
 
-        HomeFeed(recentlyPlayed, listenAgain, forgottenFavorites, artists)
+        return HomeFeed(recentlyPlayed, listenAgain, forgottenFavorites, artists)
     }
 
     private fun Track.songKey(): String {

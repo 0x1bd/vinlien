@@ -1,4 +1,4 @@
-package org.kvxd.vinlien.server
+package org.kvxd.vinlien.server.db
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -8,6 +8,7 @@ import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.kvxd.vinlien.backends.Normalizer
+import org.kvxd.vinlien.server.Config
 import org.kvxd.vinlien.shared.models.media.Track
 import org.mindrot.jbcrypt.BCrypt
 

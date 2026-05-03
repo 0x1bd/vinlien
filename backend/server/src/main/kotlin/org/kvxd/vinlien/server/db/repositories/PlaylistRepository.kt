@@ -1,15 +1,17 @@
-package org.kvxd.vinlien.server.services
+package org.kvxd.vinlien.server.db.repositories
 
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
-import org.kvxd.vinlien.server.*
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.DatabaseFactory.toTrack
+import org.kvxd.vinlien.server.db.DatabaseFactory.dbQuery
+import org.kvxd.vinlien.server.db.PlaylistTracks
+import org.kvxd.vinlien.server.db.Playlists
+import org.kvxd.vinlien.server.db.Tracks
+import org.kvxd.vinlien.server.db.repositories.TrackRepository.toTrack
 import org.kvxd.vinlien.shared.models.media.Playlist
 import org.kvxd.vinlien.shared.models.media.Track
 import java.util.UUID
 
-object PlaylistService {
+object PlaylistRepository {
 
     suspend fun getForUser(userId: String): List<Playlist> = dbQuery {
         val userPlaylists = Playlists.selectAll()
@@ -45,25 +47,23 @@ object PlaylistService {
 
         if (userPlaylists.isNotEmpty()) {
             (PlaylistTracks innerJoin Tracks).selectAll()
-                .where { PlaylistTracks.playlistId inList userPlaylists.keys }
-                .orderBy(PlaylistTracks.position to SortOrder.ASC)
-                .forEach { row ->
-                    userPlaylists[row[PlaylistTracks.playlistId]]?.tracks?.add(row.toTrack())
-                }
+            .where { PlaylistTracks.playlistId inList userPlaylists.keys }
+            .orderBy(PlaylistTracks.position to SortOrder.ASC)
+            .forEach { row ->
+                userPlaylists[row[PlaylistTracks.playlistId]]?.tracks?.add(row.toTrack())
+            }
         }
         userPlaylists.values.toList()
     }
 
-    suspend fun create(userId: String, name: String): Playlist {
+    suspend fun create(userId: String, name: String): Playlist = dbQuery {
         val newId = UUID.randomUUID().toString()
-        dbQuery {
-            Playlists.insert {
-                it[id] = newId
-                it[this.userId] = userId
-                it[this.name] = name
-            }
+        Playlists.insert {
+            it[id] = newId
+            it[this.userId] = userId
+            it[this.name] = name
         }
-        return Playlist(newId, userId, name)
+        Playlist(newId, userId, name)
     }
 
     suspend fun ownsPlaylist(userId: String, playlistId: String): Boolean = dbQuery {
@@ -81,11 +81,12 @@ object PlaylistService {
     }
 
     suspend fun delete(playlistId: String) = dbQuery {
+        PlaylistTracks.deleteWhere { PlaylistTracks.playlistId eq playlistId }
         Playlists.deleteWhere { Playlists.id eq playlistId }
     }
 
     suspend fun toggleTrack(userId: String, track: Track, targetName: String, oppositeName: String) = dbQuery {
-        DatabaseFactory.insertOrUpdateTrack(track)
+        TrackRepository.insertOrUpdateTrackInTransaction(track)
 
         val oppositeId = findPlaylistId(userId, oppositeName)
         if (oppositeId != null) {
@@ -114,7 +115,7 @@ object PlaylistService {
     }
 
     suspend fun addTrack(playlistId: String, track: Track) = dbQuery {
-        DatabaseFactory.insertOrUpdateTrack(track)
+        TrackRepository.insertOrUpdateTrackInTransaction(track)
         val nextPos = (PlaylistTracks.selectAll()
             .where { PlaylistTracks.playlistId eq playlistId }
             .maxByOrNull { it[PlaylistTracks.position] }
@@ -127,7 +128,7 @@ object PlaylistService {
     }
 
     suspend fun replaceTracks(playlistId: String, tracks: List<Track>) = dbQuery {
-        tracks.forEach { DatabaseFactory.insertOrUpdateTrack(it) }
+        tracks.forEach { TrackRepository.insertOrUpdateTrackInTransaction(it) }
         PlaylistTracks.deleteWhere { PlaylistTracks.playlistId eq playlistId }
         tracks.forEachIndexed { idx, track ->
             PlaylistTracks.insert {
@@ -136,6 +137,12 @@ object PlaylistService {
                 it[position] = idx
             }
         }
+    }
+
+    suspend fun deleteUserPlaylists(userId: String) = dbQuery {
+        val playlistIds = Playlists.selectAll().where { Playlists.userId eq userId }.map { it[Playlists.id] }
+        if (playlistIds.isNotEmpty()) PlaylistTracks.deleteWhere { PlaylistTracks.playlistId inList playlistIds }
+        Playlists.deleteWhere { Playlists.userId eq userId }
     }
 
     private fun findPlaylistId(userId: String, name: String): String? =

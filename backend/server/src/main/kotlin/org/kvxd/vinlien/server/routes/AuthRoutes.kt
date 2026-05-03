@@ -8,17 +8,14 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
 import org.kvxd.vinlien.server.Config
-import org.kvxd.vinlien.server.DatabaseFactory.dbQuery
-import org.kvxd.vinlien.server.Users
+import org.kvxd.vinlien.server.db.Users
+import org.kvxd.vinlien.server.db.repositories.UserRepository
 import org.kvxd.vinlien.server.getUsername
 import org.kvxd.vinlien.shared.models.auth.ChangePasswordReq
 import org.kvxd.vinlien.shared.models.auth.User
 import org.mindrot.jbcrypt.BCrypt
 import java.util.Date
-import java.util.UUID
 
 @Serializable
 data class AuthReq(val username: String, val pass: String)
@@ -30,7 +27,7 @@ fun Route.authRoutes(secret: String) {
     post("/api/auth/login") {
         val req = call.receive<AuthReq>()
 
-        val userRow = dbQuery { Users.selectAll().where { Users.username eq req.username }.singleOrNull() }
+        val userRow = UserRepository.findByUsername(req.username)
         if (userRow != null && BCrypt.checkpw(req.pass, userRow[Users.passwordHash])) {
             val role = userRow[Users.role]
             val id = userRow[Users.id]
@@ -52,17 +49,14 @@ fun Route.authRoutes(secret: String) {
 
     post("/api/auth/register") {
         val req = call.receive<AuthReq>()
-        val exists = dbQuery { Users.selectAll().where { Users.username eq req.username }.count() > 0 }
+        val exists = UserRepository.userExistsByUsername(req.username)
         if (exists) return@post call.respond(HttpStatusCode.Conflict)
 
-        dbQuery {
-            Users.insert {
-                it[id] = UUID.randomUUID().toString()
-                it[username] = req.username
-                it[role] = "PENDING"
-                it[passwordHash] = BCrypt.hashpw(req.pass, BCrypt.gensalt())
-            }
-        }
+        UserRepository.createUser(
+            username = req.username,
+            passwordHash = BCrypt.hashpw(req.pass, BCrypt.gensalt()),
+            role = "PENDING"
+        )
         call.respond(HttpStatusCode.Created)
     }
 
@@ -70,11 +64,7 @@ fun Route.authRoutes(secret: String) {
         post("/api/auth/change-password") {
             val username = call.getUsername() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val req = call.receive<ChangePasswordReq>()
-            dbQuery {
-                Users.update({ Users.username eq username }) {
-                    it[passwordHash] = BCrypt.hashpw(req.newPassword, BCrypt.gensalt())
-                }
-            }
+            UserRepository.updatePasswordByUsername(username, BCrypt.hashpw(req.newPassword, BCrypt.gensalt()))
             call.respond(HttpStatusCode.OK)
         }
     }
@@ -87,7 +77,7 @@ fun Route.authRoutes(secret: String) {
             val username = decoded.getClaim("username").asString()
             val id = decoded.getClaim("id").asString()
 
-            val userExists = dbQuery { Users.selectAll().where { Users.id eq id }.count() > 0 }
+            val userExists = UserRepository.userExistsById(id)
             if (!userExists) return@post call.respond(HttpStatusCode.Unauthorized, "User no longer exists")
 
             val newToken = JWT.create().withClaim("username", username).withClaim("id", id)
