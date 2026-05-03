@@ -73,7 +73,7 @@ export async function fetchSimilarTracksIfNeeded(track: Track) {
     isFetchingSimilar.set(true);
     try {
         const { apiRequest } = await import('$lib/utils/api');
-        const rec = await apiRequest('/api/radio', {
+        const rec = await apiRequest('/api/rec/similar', {
             method: 'POST', 
             body: {
                 seedTrack: track,

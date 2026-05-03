@@ -163,6 +163,8 @@ class AudioManager {
                 if (!track.artworkUrl || track.artworkUrl.includes('ytimg.com')) {
                     enrichArtwork(track).catch(() => {});
                 }
+
+                this.populateRecommendationsIfNeeded().catch(console.error);
             } else {
                 this.loadingForTrackId = null;
                 this.audio.pause();
@@ -264,9 +266,9 @@ class AudioManager {
         const idx = get(currentTrackIndex);
         
         const aheadCount = q.length - idx - 1;
-        if (aheadCount >= 30) return;
+        if (aheadCount >= 10) return;
         
-        const needed = 30 - aheadCount;
+        const needed = 10 - aheadCount;
         const seedTrack = q[q.length - 1] || q[idx];
         if (!seedTrack) return;
 

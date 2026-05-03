@@ -115,6 +115,18 @@ fun Route.recRoutes(engine: AggregationEngine, recEngine: RecommendationEngine) 
         call.respond(RadioResponse(tracks = tracks, seedTrack = req.seedTrack))
     }
 
+    post("/api/rec/similar") {
+        val req = call.receive<RadioRequest>()
+        val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
+
+        val profile = RecService.getProfile(userId)
+        val candidates = engine.getRecommendations(req.seedTrack)
+        val filtered = candidates.filterForRec(profile, req.queue).take(req.queueSize.coerceIn(1, 50))
+
+        val resultTracks = filtered.map { RecResult(it, "Similar to ${req.seedTrack.artist}") }
+        call.respond(RadioResponse(tracks = resultTracks, seedTrack = req.seedTrack))
+    }
+
     post("/api/rec/home") {
         val req = call.receive<HomeRecRequest>()
         val userId = call.getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
