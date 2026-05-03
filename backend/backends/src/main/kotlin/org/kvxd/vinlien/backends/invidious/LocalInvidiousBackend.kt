@@ -103,7 +103,7 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
                 track.id.matches(YT_ID_REGEX) -> fetchAudioStreamUrl(track.id)
                 else -> scrapeLastFmForYoutubeId(track)?.let { fetchAudioStreamUrl(it) }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

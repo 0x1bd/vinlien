@@ -19,13 +19,13 @@ object TrackMerger {
         val primary = group.maxByOrNull { it.artists.size } ?: group.first()
         val mergedArtists = group.flatMap { it.artists }.distinctBy { it.normalized() }.ifEmpty { primary.artists }
         return primary.copy(
-            artworkUrl = group.mapNotNull { it.artworkUrl }.firstOrNull() ?: primary.artworkUrl,
+            artworkUrl = group.firstNotNullOfOrNull { it.artworkUrl } ?: primary.artworkUrl,
             durationMs = group.firstOrNull { it.durationMs > 0 }?.durationMs ?: primary.durationMs,
             artist = mergedArtists.joinToString(", "),
             artists = mergedArtists,
-            lastFmUrl = group.mapNotNull { it.lastFmUrl }.firstOrNull() ?: primary.lastFmUrl,
-            albumTitle = group.mapNotNull { it.albumTitle }.firstOrNull() ?: primary.albumTitle,
-            albumId = group.mapNotNull { it.albumId }.firstOrNull() ?: primary.albumId,
+            lastFmUrl = group.firstNotNullOfOrNull { it.lastFmUrl } ?: primary.lastFmUrl,
+            albumTitle = group.firstNotNullOfOrNull { it.albumTitle } ?: primary.albumTitle,
+            albumId = group.firstNotNullOfOrNull { it.albumId } ?: primary.albumId,
             popularityScore = group.mapNotNull { it.popularityScore }.maxOrNull() ?: primary.popularityScore
         )
     }
@@ -98,27 +98,32 @@ object AlbumMerger {
         )
     }
 
-    private fun parseNativeId(nativeId: String): Pair<String, String>? = when {
+    fun parseNativeId(nativeId: String): Pair<String, String>? = when {
         nativeId.startsWith("merged:album:") -> {
             val parts = nativeId.removePrefix("merged:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
         }
+
         nativeId.startsWith("lastfm:album:") -> {
             val parts = nativeId.removePrefix("lastfm:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
         }
+
         nativeId.startsWith("itunes:album:") -> {
             val parts = nativeId.removePrefix("itunes:album:").split(":::", limit = 3)
             if (parts.size == 3) parts[1] to parts[2] else null
         }
+
         nativeId.startsWith("mb:album:") -> {
             val parts = nativeId.removePrefix("mb:album:").split(":::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else null
         }
+
         nativeId.startsWith("deezer:album:") -> {
             val parts = nativeId.removePrefix("deezer:album:").split(":::", limit = 3)
             if (parts.size == 3) parts[1] to parts[2] else null
         }
+
         else -> null
     }
 

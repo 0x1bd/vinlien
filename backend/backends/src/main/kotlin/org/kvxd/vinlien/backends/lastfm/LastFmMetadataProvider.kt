@@ -19,7 +19,7 @@ import org.kvxd.vinlien.shared.models.media.Track
 import java.net.URLDecoder
 import java.net.URLEncoder
 
-private val PLACEHOLDER_IMAGE_HASH = "2a96cbd8b46e442fc41c2b86b821562f"
+private const val PLACEHOLDER_IMAGE_HASH = "2a96cbd8b46e442fc41c2b86b821562f"
 
 @Serializable
 private data class LfmResponse(

@@ -22,7 +22,7 @@
     import {audioManager, audioProgress, currentTimeDisplay, durationDisplay} from '$lib/utils/AudioManager';
     import QueuePanel from './QueuePanel.svelte';
     import {goto} from '$app/navigation';
-    import {page} from '$app/stores';
+    import {page} from '$app/state';
     import ArtworkImage from './ArtworkImage.svelte';
     import DesktopExpandedPlayer from './DesktopExpandedPlayer.svelte';
 
@@ -81,7 +81,7 @@
     }
 
     $: if (browser) {
-        const pathname = $page.url.pathname;
+        const pathname = page.url.pathname;
         if (lastPathname && pathname !== lastPathname && isExpanded) {
             isExpanded = false;
         }
@@ -197,7 +197,7 @@
                 if (dislikedId && get(autoDownloadPlaylists).includes(dislikedId)) {
                     downloadTrack($currentTrack).catch(() => {});
                 }
-                if ($isPlaying) audioManager.playNext(true);
+                if ($isPlaying) await audioManager.playNext(true);
             }
         } catch (e) {
             isDisliked = prevDisliked;
