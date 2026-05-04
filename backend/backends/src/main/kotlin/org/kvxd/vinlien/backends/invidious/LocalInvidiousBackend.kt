@@ -90,9 +90,14 @@ class LocalInvidiousBackend(private val instanceUrl: String = "http://localhost:
     private fun apiUrl(path: String) = "$instanceUrl/api/v1/$path"
 
     private suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
-        sharedJson.decodeFromString<List<InvidiousVideo>>(
-            fetch(apiUrl("search?q=${URLEncoder.encode(query, "UTF-8")}&type=video"))
-        ).mapNotNull { it.toTrack() }
+        val rawResponse = fetch(apiUrl("search?q=${URLEncoder.encode(query, "UTF-8")}&type=video"))
+        val videos = sharedJson.decodeFromString<List<InvidiousVideo>>(rawResponse)
+
+        val sortedVideos = videos.sortedByDescending { video ->
+            if (video.author?.endsWith(" - Topic", ignoreCase = true) == true) 1 else 0
+        }
+
+        sortedVideos.mapNotNull { it.toTrack() }
     }
 
     override suspend fun searchAudio(query: String): List<Track> = search(query)

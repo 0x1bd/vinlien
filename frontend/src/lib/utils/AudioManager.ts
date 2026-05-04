@@ -8,12 +8,13 @@ import {
     isMuted,
     repeatMode,
     user,
-    useRecommendations
+    useRecommendations,
+    resolvedStreamUrl,
+    resolvedStreamProvider
 } from '$lib/utils/store';
 import {apiRequest} from '$lib/utils/api';
 import {getCachedTrackUrl} from '$lib/utils/offlineAudio';
 import {enrichArtwork} from '$lib/utils/artworkEnrich';
-import {buildStreamUrl} from '$lib/utils/stream';
 import type {Track} from '$lib/utils/types';
 
 export const audioProgress = writable(0);
@@ -199,12 +200,38 @@ class AudioManager {
         if (cachedUrl) {
             this.currentBlobUrl = cachedUrl;
             this.audio.src = cachedUrl;
+            resolvedStreamUrl.set('offline');
+            resolvedStreamProvider.set('Offline');
+            this.audio.load();
+            if (get(isPlaying)) this.audio.play().catch(() => {});
         } else {
-            this.audio.src = buildStreamUrl(track);
+            await this.resolveAndLoadStream(track);
+            this.audio.load();
+            if (get(isPlaying)) this.audio.play().catch(() => {});
         }
+    }
 
-        this.audio.load();
-        if (get(isPlaying)) this.audio.play().catch(() => {});
+    private async resolveAndLoadStream(track: Track): Promise<void> {
+        try {
+            const params = new URLSearchParams({
+                id: track.id,
+                artist: track.artist,
+                title: track.title,
+                durationMs: String(track.durationMs || 0),
+            });
+            if (track.streamUrl) params.set('streamUrl', track.streamUrl);
+
+            const resp = await fetch(`/api/stream?${params}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                resolvedStreamUrl.set(data.streamUrl);
+                resolvedStreamProvider.set(data.provider);
+                this.audio.src = data.streamUrl;
+            }
+        } catch {
+            resolvedStreamUrl.set(null);
+            resolvedStreamProvider.set(null);
+        }
     }
 
     private updatePositionState() {
@@ -319,9 +346,31 @@ class AudioManager {
 
         if (nextTrack && this.preloadedTrackId !== nextTrack.id) {
             this.preloadedTrackId = nextTrack.id;
-            this.preloadAudio.src = buildStreamUrl(nextTrack);
-            this.preloadAudio.load();
+            const resolvedUrl = await this.resolveStreamUrl(nextTrack);
+            if (resolvedUrl) {
+                this.preloadAudio.src = resolvedUrl;
+                this.preloadAudio.load();
+            }
         }
+    }
+
+    private async resolveStreamUrl(track: Track): Promise<string | null> {
+        try {
+            const params = new URLSearchParams({
+                id: track.id,
+                artist: track.artist,
+                title: track.title,
+                durationMs: String(track.durationMs || 0),
+            });
+            if (track.streamUrl) params.set('streamUrl', track.streamUrl);
+
+            const resp = await fetch(`/api/stream?${params}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                return data.streamUrl;
+            }
+        } catch {}
+        return null;
     }
 
     async playNext(force = false) {

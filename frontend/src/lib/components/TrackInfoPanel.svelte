@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { resolvedStreamUrl, resolvedStreamProvider } from '$lib/utils/store';
+
     export let track: any;
     export let onClose: () => void;
 
@@ -47,6 +49,15 @@
             <div class="row">
                 <span class="label">Stream</span>
                 <a class="val link" href={track.streamUrl} target="_blank" rel="noopener noreferrer" on:click|stopPropagation>{providerLabel(track.id)}</a>
+            </div>
+        {/if}
+        {#if $resolvedStreamUrl}
+            <div class="row stream-url-row">
+                <span class="label">Stream</span>
+                <div class="stream-url-content">
+                    <span class="provider-badge">{$resolvedStreamProvider}</span>
+                    <a class="stream-link" href={$resolvedStreamUrl} target="_blank" rel="noopener noreferrer" on:click|stopPropagation>{$resolvedStreamUrl}</a>
+                </div>
             </div>
         {/if}
         {#if track.artworkUrl}
@@ -111,6 +122,28 @@
     .val.mono { font-family: monospace; font-size: 11px; }
     .val.link { color: var(--accent-color); text-decoration: none; }
     .val.link:hover { text-decoration: underline; }
+
+    .stream-url-row {
+        align-items: flex-start;
+    }
+
+    .stream-url-content {
+        display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1;
+    }
+
+    .provider-badge {
+        display: inline-block; font-size: 10px; font-weight: 600;
+        background: var(--accent-color); color: var(--bg-base);
+        padding: 1px 8px; border-radius: 8px; align-self: flex-start;
+    }
+
+    .stream-link {
+        font-family: monospace; font-size: 10px;
+        color: var(--accent-color); text-decoration: none;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        word-break: break-all;
+    }
+    .stream-link:hover { text-decoration: underline; }
 
     @media (max-width: 600px) {
         .panel { bottom: 0; left: 0; right: 0; width: 100%; border-radius: 0; }

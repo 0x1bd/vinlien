@@ -63,6 +63,9 @@ export const currentTrack = derived(
     ([$queue, $currentTrackIndex]) => $queue[$currentTrackIndex] || null
 );
 
+export const resolvedStreamUrl = writable<string | null>(null);
+export const resolvedStreamProvider = writable<string | null>(null);
+
 export const similarTracks = writable<Track[]>([]);
 export const isFetchingSimilar = writable(false);
 let lastSimilarSeedId = '';

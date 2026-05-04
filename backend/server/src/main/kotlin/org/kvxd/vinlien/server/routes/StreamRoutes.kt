@@ -1,22 +1,15 @@
 package org.kvxd.vinlien.server.routes
 
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.utils.io.*
+import kotlinx.serialization.Serializable
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
-import java.io.File
 
-private val proxyClient = HttpClient(CIO) {
-    engine { requestTimeout = 0 }
-    followRedirects = true
-}
+@Serializable
+data class StreamResponse(val streamUrl: String, val provider: String)
 
 fun Route.streamRoutes(engine: AggregationEngine) {
     val logger = LoggerFactory.getLogger("StreamRoutes")
@@ -43,37 +36,12 @@ fun Route.streamRoutes(engine: AggregationEngine) {
             return@get call.respond(HttpStatusCode.NotFound)
         }
 
-        if (urlOrPath.startsWith("http")) {
-            val rangeHeader = call.request.headers[HttpHeaders.Range] ?: "bytes=0-"
-            val upstream = runCatching {
-                proxyClient.get(urlOrPath) {
-                    header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
-                    header(HttpHeaders.Range, rangeHeader)
-                }
-            }.getOrElse {
-                logger.error("Upstream fetch failed for track '{}' ({}): {}", title, id, it.message)
-                return@get call.respond(HttpStatusCode.BadGateway)
-            }
-            val ct = upstream.contentType()?.toString() ?: "audio/mpeg"
-            call.response.headers.append(HttpHeaders.AcceptRanges, "bytes")
-            upstream.headers[HttpHeaders.ContentRange]?.let {
-                call.response.headers.append(HttpHeaders.ContentRange, it)
-            }
-            upstream.headers[HttpHeaders.ContentLength]?.let {
-                call.response.headers.append(HttpHeaders.ContentLength, it)
-            }
-            call.respondBytesWriter(contentType = ContentType.parse(ct), status = upstream.status) {
-                runCatching { upstream.bodyAsChannel().copyTo(this) }.onFailure {
-                    logger.warn("Stream copy interrupted for track '{}' ({}): {}", title, id, it.message)
-                }
-            }
-        } else {
-            val file = File(urlOrPath)
-            if (file.exists()) call.respondFile(file)
-            else {
-                logger.error("Provider returned local path but file missing: $urlOrPath")
-                call.respond(HttpStatusCode.NotFound)
-            }
+        val provider = when {
+            id.startsWith("sc:") -> "SoundCloud"
+            id.matches(Regex("^[a-zA-Z0-9_-]{11}$")) -> "Invidious"
+            else -> "Invidious"
         }
+
+        call.respond(StreamResponse(streamUrl = urlOrPath, provider = provider))
     }
 }

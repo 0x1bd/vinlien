@@ -1,7 +1,6 @@
 import {browser} from '$app/environment';
 import {writable} from 'svelte/store';
 import type {Playlist, Track} from '$lib/utils/types';
-import {buildStreamUrl} from '$lib/utils/stream';
 
 const OFFLINE_AUDIO_CACHE = 'vinlien-offline-audio-v1';
 const PLAYLIST_LINKS_KEY = 'vinlien-offline-links';
@@ -102,7 +101,21 @@ export async function downloadTrack(track: Track): Promise<void> {
     if (!cache) return;
     const cacheKey = cacheRequestForTrack(track.id);
     if (await cache.match(cacheKey)) return;
-    const response = await fetch(buildStreamUrl(track), {
+
+    const params = new URLSearchParams({
+        id: track.id,
+        artist: track.artist,
+        title: track.title,
+        durationMs: String(track.durationMs || 0),
+    });
+    if (track.streamUrl) params.set('streamUrl', track.streamUrl);
+
+    const resolveResp = await fetch(`/api/stream?${params}`, { credentials: 'include' });
+    if (!resolveResp.ok) throw new Error(`HTTP ${resolveResp.status}`);
+    const resolveData = await resolveResp.json();
+    const streamUrl = resolveData.streamUrl;
+
+    const response = await fetch(streamUrl, {
         method: 'GET',
         credentials: 'include',
         headers: {'Range': 'bytes=0-', 'Accept-Encoding': 'identity'}

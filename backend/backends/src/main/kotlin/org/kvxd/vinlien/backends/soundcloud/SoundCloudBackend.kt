@@ -160,9 +160,16 @@ class SoundCloudBackend : MusicProvider {
 
     override suspend fun resolveStream(track: Track): String? = withContext(Dispatchers.IO) {
         try {
-            if (!track.id.startsWith("sc:") || track.streamUrl == null) return@withContext null
+            if (!track.id.startsWith("sc:")) return@withContext null
+            val scTrackId = track.id.removePrefix("sc:")
+            val trackData = sharedJson.decodeFromString<ScTrack>(
+                fetch("https://api-v2.soundcloud.com/tracks/$scTrackId?client_id=${getClientId()}")
+            )
+            val streamUrl = trackData.media?.transcodings?.firstOrNull {
+                it.format?.protocol == "progressive" && it.snipped != true
+            }?.url ?: return@withContext null
             val res = sharedJson.decodeFromString<ScStreamResponse>(
-                fetch("${track.streamUrl}?client_id=${getClientId()}")
+                fetch("$streamUrl?client_id=${getClientId()}")
             )
             res.url
         } catch (_: Exception) {

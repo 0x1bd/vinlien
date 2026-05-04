@@ -9,6 +9,19 @@ private val VERSION_TERMS = Regex(
     """\b(acoustic|live|instrumental|karaoke|cover|demo|unplugged|remixed?|extended|radio\s+edit|remastered?|reissue)\b"""
 )
 
+private val NON_MUSIC_TERMS = Regex(
+    """\b(bewertet|review|reaction|reacts|live aus|konzert|full album|playlist|medley|compilation|best of|mix|dj set|podcast|interview|making of|behind the scenes|tutorial|how to)\b""",
+    RegexOption.IGNORE_CASE
+)
+
+private val OFFICIAL_VIDEO_TERMS = Regex(
+    """\b(official\s*(video|audio|music\s*video|lyric\s*video|visualizer))\b""",
+    RegexOption.IGNORE_CASE
+)
+
+private const val MIN_SONG_DURATION_MS = 60_000L
+private const val MAX_SONG_DURATION_MS = 480_000L
+
 data class StreamCandidate(val track: Track, val provider: MusicProvider, val score: Int)
 
 class StreamResolver(private val providers: List<MusicProvider>) {
@@ -71,6 +84,8 @@ class StreamResolver(private val providers: List<MusicProvider>) {
         val targetTitle = target.title.normalized()
         if (candidateTitle.isEmpty() || targetTitle.isEmpty()) return 0
 
+        if (NON_MUSIC_TERMS.containsMatchIn(candidate.title)) return 0
+
         val targetHasVersionSuffix = VERSION_TERMS.containsMatchIn(targetTitle)
         val candidateHasVersionSuffix = VERSION_TERMS.containsMatchIn(candidateTitle)
         if (!targetHasVersionSuffix && candidateHasVersionSuffix) return 0
@@ -103,6 +118,17 @@ class StreamResolver(private val providers: List<MusicProvider>) {
             candidateTitle.withoutSpaces().contains(targetArtist.withoutSpaces())
         }
 
-        return titleScore + artistScore + (if (artistNameAppearsInTitle) 5 else 0)
+        val officialVideoBonus = if (OFFICIAL_VIDEO_TERMS.containsMatchIn(candidate.title)) 15 else 0
+
+        val durationMs = candidate.durationMs
+        val durationBonus = if (durationMs > 0) {
+            when {
+                durationMs in MIN_SONG_DURATION_MS..MAX_SONG_DURATION_MS -> 10
+                durationMs < MIN_SONG_DURATION_MS -> -10
+                else -> -5
+            }
+        } else 0
+
+        return titleScore + artistScore + (if (artistNameAppearsInTitle) 5 else 0) + officialVideoBonus + durationBonus
     }
 }
