@@ -198,7 +198,7 @@ class SoundCloudBackend : MusicProvider {
             val availableProtocols = transcodings.mapNotNull { it.format?.protocol }.distinct()
             logger.debug("SoundCloud: track {} has protocols: {}", scTrackId, availableProtocols)
 
-            val preferredOrder = listOf("hls", "progressive")
+            val preferredOrder = listOf("progressive", "hls")
             var got404 = false
             for (protocol in preferredOrder) {
                 val transcoding = transcodings.firstOrNull {
