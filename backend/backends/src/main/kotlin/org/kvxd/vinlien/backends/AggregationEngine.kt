@@ -319,6 +319,12 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
     suspend fun resolveStream(track: Track, preferredProviderId: String? = null): String =
         streamResolver.resolve(track, preferredProviderId)
 
+    suspend fun resolveStreamWithProvider(
+        track: Track,
+        preferredProviderId: String? = null
+    ): StreamResolutionResult.Success =
+        streamResolver.resolveWithProvider(track, preferredProviderId)
+
     private fun fuzzyMatch(candidate: Track, target: Track): Boolean {
         val candidateTitle = candidate.title.normalized()
         val targetTitle = target.title.normalized()

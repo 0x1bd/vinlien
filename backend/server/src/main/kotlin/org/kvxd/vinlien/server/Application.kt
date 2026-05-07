@@ -21,11 +21,11 @@ import org.jetbrains.exposed.v1.jdbc.*
 import org.kvxd.vinlien.backends.AggregationEngine
 import org.kvxd.vinlien.backends.Capability
 import org.kvxd.vinlien.backends.deezer.DeezerMetadataProvider
-import org.kvxd.vinlien.backends.invidious.LocalInvidiousBackend
 import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
 import org.kvxd.vinlien.backends.musicbrainz.MusicBrainzMetadataProvider
 import org.kvxd.vinlien.backends.soundcloud.SoundCloudBackend
+import org.kvxd.vinlien.backends.youtube.YoutubeMusicBackend
 import org.kvxd.vinlien.server.db.DatabaseFactory
 import org.kvxd.vinlien.server.db.Users
 import org.kvxd.vinlien.server.routes.*
@@ -89,7 +89,7 @@ fun Application.module() {
         add(ItunesMetadataProvider())
         add(MusicBrainzMetadataProvider())
         add(SoundCloudBackend())
-        add(LocalInvidiousBackend(Config.data.invidiousUrl))
+        add(YoutubeMusicBackend(Config.data.invidiousUrl))
     }
 
     val engine = AggregationEngine(providers)

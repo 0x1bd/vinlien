@@ -5,11 +5,11 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.kvxd.vinlien.backends.AggregationEngine
-import org.kvxd.vinlien.backends.invidious.LocalInvidiousBackend
 import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
 import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
 import org.kvxd.vinlien.backends.musicbrainz.MusicBrainzMetadataProvider
 import org.kvxd.vinlien.backends.soundcloud.SoundCloudBackend
+import org.kvxd.vinlien.backends.youtube.YoutubeMusicBackend
 import org.kvxd.vinlien.shared.models.media.Track
 import java.util.UUID
 
@@ -27,7 +27,7 @@ class AggregationEngineTest {
             add(ItunesMetadataProvider())
             add(MusicBrainzMetadataProvider())
             add(SoundCloudBackend())
-            add(LocalInvidiousBackend("http://localhost:3000"))
+            add(YoutubeMusicBackend("http://localhost:3000"))
         }
         engine = AggregationEngine(providers)
     }

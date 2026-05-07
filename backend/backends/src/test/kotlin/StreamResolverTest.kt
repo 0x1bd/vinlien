@@ -68,8 +68,85 @@ class StreamResolverTest {
         assertEquals("https://streams.test/stream:artist-match", streamUrl)
     }
 
-    private class FakeAudioProvider(private vararg val tracks: Track) : MusicProvider {
-        override val id = "stream"
+    @Test
+    fun `raw youtube id resolves through youtube music provider`() = runTest {
+        val provider = FakeAudioProvider(id = "ytmusic")
+        val resolver = StreamResolver(listOf(provider))
+
+        val streamUrl = resolver.resolve(
+            Track(
+                id = "0MP3eBOoZj0",
+                artist = "PR1SVX",
+                title = "Crystals",
+                durationMs = 63_000L
+            )
+        )
+
+        assertEquals("https://streams.test/0MP3eBOoZj0", streamUrl)
+    }
+
+    @Test
+    fun `duration-doubled visualizer does not beat matching song`() = runTest {
+        val provider = FakeAudioProvider(
+            Track(
+                id = "ytmusic:visualizer",
+                artist = "PR1SVX",
+                title = "PR1SVX - CRYSTALS [Official Visualizer]",
+                durationMs = 125_000L
+            ),
+            Track(
+                id = "ytmusic:song",
+                artist = "PR1SVX",
+                title = "CRYSTALS",
+                durationMs = 69_000L
+            ),
+            id = "ytmusic"
+        )
+        val resolver = StreamResolver(listOf(provider))
+
+        val streamUrl = resolver.resolve(
+            Track(
+                id = "itunes:crystals",
+                artist = "PR1SVX",
+                title = "Crystals",
+                durationMs = 69_000L
+            )
+        )
+
+        assertEquals("https://streams.test/ytmusic:song", streamUrl)
+    }
+
+    @Test
+    fun `native soundcloud visualizer is ranked against youtube music song`() = runTest {
+        val soundCloud = FakeAudioProvider(id = "sc")
+        val youtubeMusic = FakeAudioProvider(
+            Track(
+                id = "ytmusic:song",
+                artist = "PR1SVX",
+                title = "CRYSTALS",
+                durationMs = 69_000L
+            ),
+            id = "ytmusic"
+        )
+        val resolver = StreamResolver(listOf(soundCloud, youtubeMusic))
+
+        val result = resolver.resolveWithProvider(
+            Track(
+                id = "sc:visualizer",
+                artist = "PR1SVX",
+                title = "PR1SVX - CRYSTALS [Official Visualizer]",
+                durationMs = 125_000L
+            )
+        )
+
+        assertEquals("https://streams.test/ytmusic:song", result.streamUrl)
+        assertEquals("ytmusic", result.providerId)
+    }
+
+    private class FakeAudioProvider(
+        private vararg val tracks: Track,
+        override val id: String = "stream"
+    ) : MusicProvider {
         override val name = "Stream"
         override val capabilities = setOf(Capability.AUDIO_STREAM)
 

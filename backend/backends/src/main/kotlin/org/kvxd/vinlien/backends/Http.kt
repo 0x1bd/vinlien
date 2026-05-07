@@ -24,6 +24,21 @@ internal suspend fun fetch(url: String, headersMap: Map<String, String> = emptyM
     return response.bodyAsText()
 }
 
+internal suspend fun postJson(
+    url: String,
+    body: String,
+    headersMap: Map<String, String> = emptyMap()
+): String {
+    val response = httpClient.post(url) {
+        header(HttpHeaders.UserAgent, "Mozilla/5.0 Vinlien")
+        contentType(ContentType.Application.Json)
+        setBody(body)
+        headersMap.forEach { (k, v) -> header(k, v) }
+    }
+    if (!response.status.isSuccess()) throw Exception("HTTP ${response.status.value} for $url")
+    return response.bodyAsText()
+}
+
 internal suspend fun fetchDebug(
     url: String,
     headersMap: Map<String, String> = emptyMap(),

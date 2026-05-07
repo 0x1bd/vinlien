@@ -5,7 +5,7 @@ Open Source selfhosted music streaming application
 ## Features
 
 - Stream your music collection from anywhere
-- Get recommendations from multiple providers (lastfm, youtube (via invidious), soundcloud, ...)
+- Get recommendations from multiple providers (lastfm, youtube music, soundcloud, ...)
 - User authentication and access control
 - Mobile-friendly interface
 

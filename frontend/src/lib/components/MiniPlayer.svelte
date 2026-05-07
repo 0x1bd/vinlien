@@ -87,7 +87,7 @@
         if (id.startsWith('lastfm:')) return 'Last.fm';
         if (id.startsWith('itunes:')) return 'iTunes';
         if (id.startsWith('sc:')) return 'SoundCloud';
-        if (id.startsWith('invidious:')) return 'Invidious';
+        if (id.startsWith('ytmusic:')) return 'YouTube Music';
         return id.split(':')[0];
     }
 </script>

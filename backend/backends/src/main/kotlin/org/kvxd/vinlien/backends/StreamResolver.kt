@@ -3,6 +3,7 @@ package org.kvxd.vinlien.backends
 import kotlinx.coroutines.*
 import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
+import kotlin.math.abs
 
 internal val YT_ID_REGEX = Regex("^[a-zA-Z0-9_-]{11}$")
 
@@ -18,6 +19,11 @@ private val NON_MUSIC_TERMS = Regex(
 
 private val OFFICIAL_VIDEO_TERMS = Regex(
     """\b(official\s*(video|audio|music\s*video|lyric\s*video|visualizer))\b""",
+    RegexOption.IGNORE_CASE
+)
+
+private val VISUALIZER_TERMS = Regex(
+    """\b(official\s+visuali[sz]er|visuali[sz]er)\b""",
     RegexOption.IGNORE_CASE
 )
 
@@ -43,22 +49,10 @@ class StreamResolver(private val providers: List<MusicProvider>) {
     private val logger = LoggerFactory.getLogger(StreamResolver::class.java)
 
     suspend fun resolve(track: Track, preferredProviderId: String? = null): String =
-        Profiler.measure("StreamResolver.resolve(${track.artist} - ${track.title})") {
-            val nativeProvider = findNativeProvider(track)
-            if (nativeProvider != null) {
-                logger.info("Trying native provider '{}' for '{} - {}'", nativeProvider.id, track.artist, track.title)
-                val result = nativeProvider.resolveStream(track)
-                when (result) {
-                    is StreamResolutionResult.Success -> {
-                        logger.info("Native provider '{}' resolved stream successfully", nativeProvider.id)
-                        return@measure result.streamUrl
-                    }
-                    is StreamResolutionResult.Failure -> {
-                        logger.warn("Native provider '{}' failed: {}", nativeProvider.id, result.reason)
-                    }
-                }
-            }
+        resolveWithProvider(track, preferredProviderId).streamUrl
 
+    suspend fun resolveWithProvider(track: Track, preferredProviderId: String? = null): StreamResolutionResult.Success =
+        Profiler.measure("StreamResolver.resolve(${track.artist} - ${track.title})") {
             val rankedCandidates = searchAndRankCandidates(track, preferredProviderId)
             logger.info("Stream resolution for '{} - {}': {} ranked candidates",
                 track.artist, track.title, rankedCandidates.size)
@@ -79,7 +73,7 @@ class StreamResolver(private val providers: List<MusicProvider>) {
                 when (result) {
                     is StreamResolutionResult.Success -> {
                         logger.info("Provider '{}' resolved stream successfully", candidate.provider.id)
-                        return@measure result.streamUrl
+                        return@measure result
                     }
                     is StreamResolutionResult.Failure -> {
                         logger.warn("Provider '{}' failed for '{} - {}': {}",
@@ -125,7 +119,7 @@ class StreamResolver(private val providers: List<MusicProvider>) {
         if (nativeProvider != null) return nativeProvider
 
         val isRawYoutubeId = track.id.matches(YT_ID_REGEX)
-        return if (isRawYoutubeId) providers.find { it.id == "invidious" && Capability.AUDIO_STREAM in it.capabilities }
+        return if (isRawYoutubeId) providers.find { it.id == "ytmusic" && Capability.AUDIO_STREAM in it.capabilities }
         else null
     }
 
@@ -136,6 +130,10 @@ class StreamResolver(private val providers: List<MusicProvider>) {
         val searchQuery = buildSearchQuery(track)
         val audioProviders = providers.filter { Capability.AUDIO_STREAM in it.capabilities }
         logger.info("Searching {} audio providers with query: '{}'", audioProviders.size, searchQuery)
+
+        val nativeCandidate = findNativeProvider(track)?.let { nativeProvider ->
+            StreamCandidate(track, nativeProvider, scoreMatch(track, track))
+        }
 
         val candidates = coroutineScope {
             audioProviders.map { provider ->
@@ -148,7 +146,7 @@ class StreamResolver(private val providers: List<MusicProvider>) {
                     results.map { candidate -> StreamCandidate(candidate, provider, scoreMatch(candidate, track)) }
                 }
             }.awaitAll().flatten()
-        }
+        } + listOfNotNull(nativeCandidate)
 
         val scored = candidates.filter { it.score > 0 }
         val zeroScore = candidates.filter { it.score == 0 }
@@ -221,7 +219,9 @@ class StreamResolver(private val providers: List<MusicProvider>) {
             candidateTitle.withoutSpaces().contains(targetArtist.withoutSpaces())
         }
 
-        val officialVideoBonus = if (OFFICIAL_VIDEO_TERMS.containsMatchIn(candidate.title)) 15 else 0
+        val isVisualizer = VISUALIZER_TERMS.containsMatchIn(candidate.title)
+        val officialVideoBonus = if (!isVisualizer && OFFICIAL_VIDEO_TERMS.containsMatchIn(candidate.title)) 15 else 0
+        val visualizerPenalty = if (isVisualizer) -45 else 0
 
         val durationMs = candidate.durationMs
         val durationBonus = if (durationMs > 0) {
@@ -232,6 +232,16 @@ class StreamResolver(private val providers: List<MusicProvider>) {
             }
         } else 0
 
-        return titleScore + artistScore + (if (artistNameAppearsInTitle) 5 else 0) + officialVideoBonus + durationBonus
+        val durationMismatchPenalty = when {
+            target.durationMs <= 0 || candidate.durationMs <= 0 -> 0
+            candidate.durationMs > (target.durationMs * 1.35).toLong() &&
+                    abs(candidate.durationMs - target.durationMs) > 30_000L -> return 0
+            abs(candidate.durationMs - target.durationMs) <= 10_000L -> 10
+            abs(candidate.durationMs - target.durationMs) > 30_000L -> -10
+            else -> 0
+        }
+
+        return titleScore + artistScore + (if (artistNameAppearsInTitle) 5 else 0) +
+                officialVideoBonus + visualizerPenalty + durationBonus + durationMismatchPenalty
     }
 }

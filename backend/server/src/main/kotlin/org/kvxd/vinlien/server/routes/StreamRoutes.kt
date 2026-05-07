@@ -40,7 +40,7 @@ fun Route.streamRoutes(engine: AggregationEngine) {
         }
 
         val track = Track(id = id, artist = artist, title = title, durationMs = durationMs, streamUrl = streamUrl)
-        val resolveResult = runCatching { engine.resolveStream(track, preferred) }
+        val resolveResult = runCatching { engine.resolveStreamWithProvider(track, preferred) }
 
         if (resolveResult.isFailure) {
             val exception = resolveResult.exceptionOrNull()
@@ -52,20 +52,22 @@ fun Route.streamRoutes(engine: AggregationEngine) {
             ))
         }
 
-        val urlOrPath = resolveResult.getOrNull()
-        if (urlOrPath == null) {
+        val stream = resolveResult.getOrNull()
+        if (stream == null) {
             logger.error("Stream resolution returned null for '{} - {}' (ID: {})", artist, title, id)
             return@get call.respond(HttpStatusCode.NotFound, StreamErrorResponse(error = "No stream available"))
         }
 
-        val provider = when {
-            id.startsWith("sc:") -> "SoundCloud"
-            id.matches(Regex("^[a-zA-Z0-9_-]{11}$")) -> "Invidious"
-            else -> "Invidious"
-        }
+        val provider = providerLabel(stream.providerId)
 
-        val response = StreamResponse(streamUrl = urlOrPath, provider = provider)
+        val response = StreamResponse(streamUrl = stream.streamUrl, provider = provider)
         streamCache.put(cacheKey, response)
         call.respond(response)
     }
+}
+
+private fun providerLabel(providerId: String): String = when (providerId) {
+    "sc" -> "SoundCloud"
+    "ytmusic" -> "YouTube Music"
+    else -> providerId
 }
