@@ -7,7 +7,8 @@ import org.slf4j.LoggerFactory
 internal val YT_ID_REGEX = Regex("^[a-zA-Z0-9_-]{11}$")
 
 private val VERSION_TERMS = Regex(
-    """\b(acoustic|live|instrumental|karaoke|cover|demo|unplugged|remixed?|extended|radio\s+edit|remastered?|reissue)\b"""
+    """\b(acoustic|live|instrumental|karaoke|cover|demo|unplugged|remixed?|extended|radio\s+edit|remastered?|reissue|slowed|reverb|sped\s+up|speed\s+up|nightcore|8d|loop|remake)\b""",
+    RegexOption.IGNORE_CASE
 )
 
 private val NON_MUSIC_TERMS = Regex(
@@ -22,6 +23,11 @@ private val OFFICIAL_VIDEO_TERMS = Regex(
 
 private const val MIN_SONG_DURATION_MS = 60_000L
 private const val MAX_SONG_DURATION_MS = 480_000L
+
+private val ARTIST_NAME_SPLIT = Regex(
+    """[\s]*[&,][\s]*|[\s]+(?:x|and)\s+|[\s]+(?<![a-zA-Z])(?:feat|ft|featuring)\.?\s+""",
+    RegexOption.IGNORE_CASE
+)
 
 private val PARENTHETICAL_WORDS = Regex(
     """\b(official|video|audio|music|lyric|lyrics|visualizer|hd|hq|4k|clip|vevo|zugabe|bonus|remix|edit|version|mix)\b""",
@@ -195,7 +201,7 @@ class StreamResolver(private val providers: List<MusicProvider>) {
             else -> return 0
         }
 
-        val targetArtists = target.artists
+        val targetArtists = target.artists.ifEmpty { target.artist.split(ARTIST_NAME_SPLIT) }
             .map { normalizeArtistName(it) }
             .filter { it.isNotEmpty() }
             .ifEmpty { listOf(normalizeArtistName(target.artist)) }
