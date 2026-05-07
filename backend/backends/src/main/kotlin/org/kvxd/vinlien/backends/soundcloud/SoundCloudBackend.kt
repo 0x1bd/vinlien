@@ -6,11 +6,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.kvxd.vinlien.backends.Capability
-import org.kvxd.vinlien.backends.MusicProvider
-import org.kvxd.vinlien.backends.Normalizer
-import org.kvxd.vinlien.backends.fetch
-import org.kvxd.vinlien.backends.sharedJson
+import org.kvxd.vinlien.backends.*
 import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -83,11 +79,14 @@ private data class ScTranscoding(
 )
 
 @Serializable
-private data class ScFormat(val protocol: String? = null)
+private data class ScFormat(
+    val protocol: String? = null,
+    @SerialName("mime_type")
+    val mimeType: String? = null
+)
 
 @Serializable
 private data class ScStreamResponse(val url: String? = null)
-
 
 class SoundCloudBackend : MusicProvider {
     override val id = "sc"
@@ -112,8 +111,8 @@ class SoundCloudBackend : MusicProvider {
     } catch (_: Exception) {
     }
 
-    private suspend fun getClientId(): String = mutex.withLock {
-        clientId?.let { return it }
+    private suspend fun refreshClientId(): String = mutex.withLock {
+        clientId = null
         try {
             val html = fetch("https://soundcloud.com")
             val scriptUrls = Regex("""<script.*?src="(https://a-v2\.sndcdn\.com/assets/[^"]+)"""")
@@ -125,14 +124,19 @@ class SoundCloudBackend : MusicProvider {
                 if (match != null) {
                     clientId = match.groupValues[1]
                     persistClientId(clientId!!)
-                    logger.info("Found SoundCloud client_id: $clientId")
+                    logger.info("Refreshed SoundCloud client_id: $clientId")
                     return clientId!!
                 }
             }
         } catch (e: Exception) {
-            logger.warn("Failed to scrape SoundCloud client_id: ${e.message}")
+            logger.warn("Failed to refresh SoundCloud client_id: ${e.message}")
         }
         return "1r2g3h4j5k6l7m8n9o0p"
+    }
+
+    private suspend fun getClientId(): String = mutex.withLock {
+        clientId?.let { return it }
+        refreshClientId()
     }
 
     override suspend fun searchTracks(query: String): List<Track> = withContext(Dispatchers.IO) {
@@ -141,7 +145,8 @@ class SoundCloudBackend : MusicProvider {
             sharedJson.decodeFromString<ScSearchResponse>(
                 fetch("https://api-v2.soundcloud.com/search/tracks?q=$encoded&client_id=${getClientId()}&limit=15")
             ).collection.mapNotNull { it.toDomainTrack() }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logger.warn("SoundCloud search failed for '{}': {}", query, e.message)
             emptyList()
         }
     }
@@ -153,27 +158,105 @@ class SoundCloudBackend : MusicProvider {
             sharedJson.decodeFromString<ScTrendingResponse>(
                 fetch("https://api-v2.soundcloud.com/charts?kind=trending&genre=soundcloud:genres:all-music&client_id=${getClientId()}&limit=10")
             ).collection.mapNotNull { it.track?.toDomainTrack() }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logger.warn("SoundCloud trending failed: {}", e.message)
             emptyList()
         }
     }
 
-    override suspend fun resolveStream(track: Track): String? = withContext(Dispatchers.IO) {
+    override suspend fun resolveStream(track: Track): StreamResolutionResult = withContext(Dispatchers.IO) {
         try {
-            if (!track.id.startsWith("sc:")) return@withContext null
+            if (!track.id.startsWith("sc:")) {
+                return@withContext StreamResolutionResult.Failure(
+                    providerId = id,
+                    reason = "Track ID '${track.id}' is not a SoundCloud track"
+                )
+            }
+
             val scTrackId = track.id.removePrefix("sc:")
+            logger.debug("SoundCloud: fetching track data for ID '{}'", scTrackId)
+
             val trackData = sharedJson.decodeFromString<ScTrack>(
                 fetch("https://api-v2.soundcloud.com/tracks/$scTrackId?client_id=${getClientId()}")
             )
-            val streamUrl = trackData.media?.transcodings?.firstOrNull {
-                it.format?.protocol == "progressive" && it.snipped != true
-            }?.url ?: return@withContext null
-            val res = sharedJson.decodeFromString<ScStreamResponse>(
-                fetch("$streamUrl?client_id=${getClientId()}")
+
+            if (trackData.policy?.uppercase() == "SNIPPET") {
+                return@withContext StreamResolutionResult.Failure(
+                    providerId = id,
+                    reason = "SoundCloud track $scTrackId is snippet-only (policy=SNIPPET)"
+                )
+            }
+
+            val transcodings = trackData.media?.transcodings ?: emptyList()
+            if (transcodings.isEmpty()) {
+                return@withContext StreamResolutionResult.Failure(
+                    providerId = id,
+                    reason = "No transcodings available for SoundCloud track $scTrackId"
+                )
+            }
+
+            val availableProtocols = transcodings.mapNotNull { it.format?.protocol }.distinct()
+            logger.debug("SoundCloud: track {} has protocols: {}", scTrackId, availableProtocols)
+
+            val preferredOrder = listOf("hls", "progressive")
+            var got404 = false
+            for (protocol in preferredOrder) {
+                val transcoding = transcodings.firstOrNull {
+                    it.format?.protocol == protocol && it.snipped != true
+                } ?: continue
+
+                logger.debug("SoundCloud: trying {} transcoding for track '{}'", protocol, scTrackId)
+                val (url, was404) = tryFetchStreamUrl(transcoding.url, scTrackId)
+                if (was404) got404 = true
+                if (url != null) {
+                    logger.info("SoundCloud: resolved stream for track '{}' via {}", scTrackId, protocol)
+                    return@withContext StreamResolutionResult.Success(url, id)
+                }
+            }
+
+            if (got404) {
+                logger.info("SoundCloud: got 404 on all protocols, refreshing client_id and retrying for '{}'", scTrackId)
+                refreshClientId()
+                for (protocol in preferredOrder) {
+                    val transcoding = transcodings.firstOrNull {
+                        it.format?.protocol == protocol && it.snipped != true
+                    } ?: continue
+
+                    logger.debug("SoundCloud: retrying {} transcoding with new client_id for '{}'", protocol, scTrackId)
+                    val (url, _) = tryFetchStreamUrl(transcoding.url, scTrackId)
+                    if (url != null) {
+                        logger.info("SoundCloud: resolved stream for track '{}' via {} (after client_id refresh)", scTrackId, protocol)
+                        return@withContext StreamResolutionResult.Success(url, id)
+                    }
+                }
+            }
+
+            return@withContext StreamResolutionResult.Failure(
+                providerId = id,
+                reason = "All SoundCloud transcoding attempts failed for $scTrackId (protocols: $availableProtocols)"
             )
-            res.url
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            logger.warn("SoundCloud: resolveStream failed for '{} - {}' (id={}): {}",
+                track.artist, track.title, track.id, e.message)
+            StreamResolutionResult.Failure(
+                providerId = id,
+                reason = "SoundCloud: ${e.message ?: e::class.simpleName}",
+                cause = e
+            )
+        }
+    }
+
+    private suspend fun tryFetchStreamUrl(transcodingUrl: String?, scTrackId: String): Pair<String?, Boolean> {
+        if (transcodingUrl == null) return null to false
+        return try {
+            val res = sharedJson.decodeFromString<ScStreamResponse>(
+                fetch("$transcodingUrl?client_id=${getClientId()}")
+            )
+            res.url to false
+        } catch (e: Exception) {
+            val is404 = e.message?.contains("404") == true
+            logger.debug("SoundCloud: transcoding fetch failed for {}: {} (404={})", scTrackId, e.message, is404)
+            null to is404
         }
     }
 }

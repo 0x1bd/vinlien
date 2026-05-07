@@ -22,7 +22,6 @@
     let dragProgress = 0;
     let progressBarEl: HTMLElement;
 
-    // Marquee
     let titleViewportEl: HTMLDivElement;
     let titleTextEl: HTMLSpanElement;
     let isOverflowing = false;
@@ -433,6 +432,11 @@
 
     .artist-link {
         cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+        max-width: 100%;
     }
 
     .artist-link:hover {
@@ -444,6 +448,9 @@
         font-size: 11px;
         color: var(--text-secondary);
         opacity: .7;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .album-btn {
@@ -454,6 +461,11 @@
         font-size: 11px;
         color: inherit;
         cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+        max-width: 100%;
     }
 
     .album-btn:hover {

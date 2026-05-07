@@ -15,6 +15,7 @@ import {
 import {apiRequest} from '$lib/utils/api';
 import {getCachedTrackUrl} from '$lib/utils/offlineAudio';
 import {enrichArtwork} from '$lib/utils/artworkEnrich';
+import {addToast} from '$lib/utils/toast';
 import type {Track} from '$lib/utils/types';
 
 export const audioProgress = writable(0);
@@ -227,8 +228,21 @@ class AudioManager {
                 resolvedStreamUrl.set(data.streamUrl);
                 resolvedStreamProvider.set(data.provider);
                 this.audio.src = data.streamUrl;
+            } else {
+                let errorMsg = `Cannot play "${track.title}"`;
+                try {
+                    const errorBody = await resp.json();
+                    if (errorBody.details) errorMsg += `: ${errorBody.details}`;
+                    else if (errorBody.error) errorMsg += `: ${errorBody.error}`;
+                } catch {}
+                console.warn('[audio] Stream resolution failed:', errorMsg);
+                addToast(errorMsg, 'error');
+                resolvedStreamUrl.set(null);
+                resolvedStreamProvider.set(null);
             }
-        } catch {
+        } catch (e) {
+            console.error('[audio] Stream resolution error:', e);
+            addToast(`Cannot play "${track.title}": Network error`, 'error');
             resolvedStreamUrl.set(null);
             resolvedStreamProvider.set(null);
         }
@@ -368,8 +382,15 @@ class AudioManager {
             if (resp.ok) {
                 const data = await resp.json();
                 return data.streamUrl;
+            } else {
+                try {
+                    const errorBody = await resp.json();
+                    console.warn(`[audio] Preload stream resolution failed for '${track.title}': ${errorBody.details || errorBody.error || 'unknown'}`);
+                } catch {}
             }
-        } catch {}
+        } catch (e) {
+            console.warn('[audio] Preload stream resolution error:', e);
+        }
         return null;
     }
 

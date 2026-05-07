@@ -16,6 +16,11 @@ enum class Capability {
     AUDIO_STREAM
 }
 
+sealed interface StreamResolutionResult {
+    data class Success(val streamUrl: String, val providerId: String) : StreamResolutionResult
+    data class Failure(val providerId: String, val reason: String, val cause: Throwable? = null) : StreamResolutionResult
+}
+
 interface MusicProvider {
     val id: String
     val name: String
@@ -33,6 +38,11 @@ interface MusicProvider {
     suspend fun getRecommendations(track: Track): List<Track> = emptyList()
     suspend fun getTrending(): List<Track> = emptyList()
 
-    suspend fun resolveStream(track: Track): String? = null
+    suspend fun resolveStream(track: Track): StreamResolutionResult =
+        StreamResolutionResult.Failure(
+            providerId = id,
+            reason = "Provider '$id' does not support audio streaming"
+        )
+
     suspend fun searchAudio(query: String): List<Track> = emptyList()
 }

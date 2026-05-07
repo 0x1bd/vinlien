@@ -5,14 +5,19 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 import org.kvxd.vinlien.backends.AggregationEngine
+import org.kvxd.vinlien.server.TtlCache
 import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
 
 @Serializable
 data class StreamResponse(val streamUrl: String, val provider: String)
 
+@Serializable
+data class StreamErrorResponse(val error: String, val details: String? = null)
+
 fun Route.streamRoutes(engine: AggregationEngine) {
     val logger = LoggerFactory.getLogger("StreamRoutes")
+    val streamCache = TtlCache<String, StreamResponse>(ttlMs = 10 * 60 * 1000L, maxSize = 200)
 
     get("/api/stream") {
         val id = call.request.queryParameters["id"] ?: ""
@@ -25,15 +30,32 @@ fun Route.streamRoutes(engine: AggregationEngine) {
 
         if (id.isBlank() || title.isBlank()) {
             logger.warn("Rejecting stream request: Missing ID or Title (id='$id', title='$title')")
-            return@get call.respond(HttpStatusCode.BadRequest)
+            return@get call.respond(HttpStatusCode.BadRequest, StreamErrorResponse(error = "Missing track ID or title"))
+        }
+
+        val cacheKey = id
+        val cached = streamCache.get(cacheKey)
+        if (cached != null) {
+            return@get call.respond(cached)
         }
 
         val track = Track(id = id, artist = artist, title = title, durationMs = durationMs, streamUrl = streamUrl)
-        val urlOrPath = runCatching { engine.resolveStream(track, preferred) }.getOrNull()
+        val resolveResult = runCatching { engine.resolveStream(track, preferred) }
 
+        if (resolveResult.isFailure) {
+            val exception = resolveResult.exceptionOrNull()
+            val errorMsg = exception?.message ?: "Unknown error"
+            logger.error("Stream resolution failed for '{} - {}' (ID: {}): {}", artist, title, id, errorMsg)
+            return@get call.respond(HttpStatusCode.NotFound, StreamErrorResponse(
+                error = "No stream available",
+                details = errorMsg
+            ))
+        }
+
+        val urlOrPath = resolveResult.getOrNull()
         if (urlOrPath == null) {
-            logger.error("All providers failed to stream track '{} - {}' (ID: {})", artist, title, id)
-            return@get call.respond(HttpStatusCode.NotFound)
+            logger.error("Stream resolution returned null for '{} - {}' (ID: {})", artist, title, id)
+            return@get call.respond(HttpStatusCode.NotFound, StreamErrorResponse(error = "No stream available"))
         }
 
         val provider = when {
@@ -42,6 +64,8 @@ fun Route.streamRoutes(engine: AggregationEngine) {
             else -> "Invidious"
         }
 
-        call.respond(StreamResponse(streamUrl = urlOrPath, provider = provider))
+        val response = StreamResponse(streamUrl = urlOrPath, provider = provider)
+        streamCache.put(cacheKey, response)
+        call.respond(response)
     }
 }

@@ -19,9 +19,8 @@
     <logger name="io.netty" level="WARN"/>
     <logger name="io.ktor.routing" level="WARN"/>
 
-    <logger name="org.kvxd.vinlien.backends.Profiler" level="DEBUG" additivity="false">
-        <appender-ref ref="FILE"/>
-    </logger>
+    <logger name="org.kvxd.vinlien.backends" level="DEBUG"/>
+    <logger name="StreamRoutes" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
