@@ -4,7 +4,7 @@
     import {addToast} from '$lib/utils/toast';
     import {apiRequest} from '$lib/utils/api';
     import {downloadTrack} from '$lib/utils/offlineAudio';
-    import {proxyArtwork} from '$lib/utils/artwork';
+    import ArtworkImage from '$lib/components/ArtworkImage.svelte';
 
     let newPlaylistName = '';
     let isCreating = false;
@@ -78,7 +78,11 @@
             </div>
 
             <div class="track-preview">
-                <img src={proxyArtwork($trackToAdd.artworkUrl)} alt="art">
+                <div class="track-preview-art">
+                    <ArtworkImage track={$trackToAdd}>
+                        {($trackToAdd.title[0] ?? '?').toUpperCase()}
+                    </ArtworkImage>
+                </div>
                 <div>
                     <div class="title">{$trackToAdd.title}</div>
                     <div class="artist">{$trackToAdd.artist}</div>
@@ -168,10 +172,11 @@
         border-radius: 6px;
     }
 
-    .track-preview img {
+    .track-preview-art {
         width: 48px;
         height: 48px;
         border-radius: 4px;
+        flex-shrink: 0;
     }
 
     .title {

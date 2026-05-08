@@ -78,7 +78,7 @@
 
     {#if $currentTrack}
         <div class="mep-artwork">
-            <ArtworkImage src={$currentTrack.artworkUrl} seed={$currentTrack.artist + $currentTrack.title}>
+            <ArtworkImage track={$currentTrack}>
                 {($currentTrack.title[0] ?? '?').toUpperCase()}
             </ArtworkImage>
         </div>

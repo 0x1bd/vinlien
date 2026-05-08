@@ -1,28 +1,18 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import type {Track} from '$lib/utils/types';
     import ArtworkImage from './ArtworkImage.svelte';
-    import {enrichedArtworkByTrackId, enrichArtwork} from '$lib/utils/artworkEnrich';
 
     export let track: Track;
     export let onPlay: () => void;
     export let subtitle: string | undefined = undefined;
-
-    $: artworkUrl = track.artworkUrl || $enrichedArtworkByTrackId[track.id] || null;
-
-    onMount(() => {
-        if (!track.artworkUrl || track.artworkUrl.includes('ytimg.com')) {
-            enrichArtwork(track).catch(() => {});
-        }
-    });
 </script>
 
 <div class="track-card" role="button" tabindex="0"
      on:click={onPlay}
      on:keydown={e => (e.key === 'Enter' || e.key === ' ') && onPlay()}>
     <div class="img-wrapper">
-        <ArtworkImage src={artworkUrl} seed={track.artist + track.title}>
+        <ArtworkImage {track}>
             {track.title[0]?.toUpperCase() ?? '?'}
         </ArtworkImage>
     </div>

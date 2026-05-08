@@ -7,6 +7,7 @@
     import {downloadPlaylistAudio, getPlaylistOfflineStats, removePlaylistAudio, activeDownloads} from '$lib/utils/offlineAudio';
     import {audioManager} from '$lib/utils/AudioManager';
     import TrackRow from '$lib/components/TrackRow.svelte';
+    import {enrichedArtworkByTrackId, proxyArtwork, trackArtworkUrl} from '$lib/utils/artwork';
     import type {Playlist} from '$lib/utils/types';
 
     $: selectedPlaylistId = $page.params.id;
@@ -83,7 +84,7 @@
     }
 
     $: isSystemPlaylist = playlist?.name === 'Liked Songs' || playlist?.name === 'Disliked Songs';
-    $: displayImage = playlist?.imageUrl || (playlist?.tracks.length ? playlist.tracks[0].artworkUrl : null);
+    $: displayImage = playlist?.imageUrl || (playlist?.tracks.length ? trackArtworkUrl(playlist.tracks[0], $enrichedArtworkByTrackId) : null);
     $: totalDurationMs = playlist?.tracks.reduce((acc, t) => acc + (t.durationMs || 0), 0) || 0;
 
     function formatTotalTime(ms: number) {
@@ -249,7 +250,7 @@
     <div class="playlist-header">
         <div class="playlist-art-wrapper">
             {#if displayImage}
-                <img src={displayImage} alt="Playlist Art" class="playlist-art"/>
+                <img src={proxyArtwork(displayImage)} alt="Playlist Art" class="playlist-art"/>
             {:else}
                 <div class="playlist-art fallback">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"

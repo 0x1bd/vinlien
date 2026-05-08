@@ -1,14 +1,31 @@
 <script lang="ts">
-    import {placeholderGradient, proxyArtwork} from '$lib/utils/artwork';
+    import {onMount} from 'svelte';
+    import {
+        enrichedArtworkByTrackId,
+        enrichArtwork,
+        placeholderGradient,
+        proxyArtwork,
+        trackArtworkUrl
+    } from '$lib/utils/artwork';
+    import type {Track} from '$lib/utils/types';
 
     export let src: string | null | undefined = undefined;
+    export let track: Track | null | undefined = undefined;
     export let seed: string = '';
+    export let autoEnrich = true;
 
-    $: proxiedSrc = proxyArtwork(src);
+    let mounted = false;
+
+    $: resolvedSrc = track ? trackArtworkUrl(track, $enrichedArtworkByTrackId) : (src || null);
+    $: resolvedSeed = seed || (track ? track.artist + track.title : '');
+    $: proxiedSrc = proxyArtwork(resolvedSrc);
+    $: if (mounted && autoEnrich && track) {
+        enrichArtwork(track).catch(() => {});
+    }
 
     let imgSrc: string | undefined = undefined;
     let imageVisible = false;
-    let failed = false;      // true = gave up after retries; reset only when src changes
+    let failed = false;
     let retried = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let imgKey = 0;
@@ -17,7 +34,6 @@
         if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
     }
 
-    // Reset state whenever the source URL changes
     $: {
         if (proxiedSrc !== imgSrc) {
             clearTimer();
@@ -43,12 +59,18 @@
             imageVisible = false;
         }
     }
+
+    onMount(() => {
+        mounted = true;
+        if (autoEnrich && track) enrichArtwork(track).catch(() => {});
+        return clearTimer;
+    });
 </script>
 
 <div class="art-root">
     <div class="art-placeholder"
          class:loading={!!imgSrc && !imageVisible && !failed}
-         style="background: {placeholderGradient(seed)}">
+         style="background: {placeholderGradient(resolvedSeed)}">
         {#if !imageVisible}<slot/>{/if}
     </div>
     {#if imgSrc && !failed}

@@ -26,7 +26,7 @@
     <div class="desktop-expanded-now-playing">
         <div class="desktop-large-art">
             {#if $currentTrack}
-                <ArtworkImage src={$currentTrack.artworkUrl} seed={$currentTrack.artist + $currentTrack.title}>
+                <ArtworkImage track={$currentTrack}>
                     {($currentTrack.title[0] ?? '?').toUpperCase()}
                 </ArtworkImage>
             {/if}
@@ -54,7 +54,7 @@
                              in:fly={{ y: 20, duration: 400, delay: i * 40, easing: cubicOut }}
                              on:click={() => handleSimilarClick(track)}>
                             <div class="similar-item-art">
-                                <ArtworkImage src={track.artworkUrl} seed={track.artist + track.title}>
+                                <ArtworkImage {track}>
                                     {(track.title[0] ?? '?').toUpperCase()}
                                 </ArtworkImage>
                             </div>

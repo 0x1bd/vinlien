@@ -14,7 +14,7 @@ import {
 } from '$lib/utils/store';
 import {apiRequest} from '$lib/utils/api';
 import {getCachedTrackUrl} from '$lib/utils/offlineAudio';
-import {enrichArtwork} from '$lib/utils/artworkEnrich';
+import {enrichedArtworkByTrackId, enrichArtwork, isLowQualityArtwork, trackArtworkUrl} from '$lib/utils/artwork';
 import {addToast} from '$lib/utils/toast';
 import type {Track} from '$lib/utils/types';
 
@@ -130,13 +130,14 @@ class AudioManager {
                 this.reportPlaybackEvent(track, 'started', 0, false).catch(() => {});
 
                 this.loadTrack(track);
+                const artwork = trackArtworkUrl(track, get(enrichedArtworkByTrackId)) || '';
 
                 if ('mediaSession' in navigator) {
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: track.title,
                         artist: track.artist,
                         album: track.albumTitle || '',
-                        artwork: [{src: track.artworkUrl || '', sizes: '512x512', type: 'image/jpeg'}]
+                        artwork: artwork ? [{src: artwork, sizes: '512x512', type: 'image/jpeg'}] : []
                     });
 
                     navigator.mediaSession.setActionHandler('play', () => isPlaying.set(true));
@@ -155,11 +156,11 @@ class AudioManager {
                         title: track.title,
                         artist: track.artist,
                         album: track.albumTitle || undefined,
-                        artwork: track.artworkUrl || null
+                        artwork: artwork || null
                     });
                 }
 
-                if (!track.artworkUrl || track.artworkUrl.includes('ytimg.com')) {
+                if (isLowQualityArtwork(trackArtworkUrl(track, get(enrichedArtworkByTrackId)))) {
                     enrichArtwork(track).catch(() => {});
                 }
 
