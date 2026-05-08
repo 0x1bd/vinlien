@@ -27,6 +27,15 @@ const REPEAT_ALL = 1;
 const REPEAT_ONE = 2;
 
 const PRELOAD_SECONDS_BEFORE_END = 15;
+const NORMALIZED_MAX_VOLUME = 0.72;
+const VOLUME_CURVE_EXPONENT = 2.4;
+const TRACK_FADE_OUT_MS = 180;
+const TRACK_FADE_IN_MS = 220;
+
+function normalizedVolume(value: number): number {
+    const clamped = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
+    return Math.pow(clamped, VOLUME_CURVE_EXPONENT) * NORMALIZED_MAX_VOLUME;
+}
 
 class AudioManager {
     private audio = new Audio();
@@ -39,6 +48,9 @@ class AudioManager {
     private loadingForTrackId: string | null = null;
     private streamRetried = new Set<string>();
     private trackStartTimeMs = 0;
+    private targetVolume = normalizedVolume(get(volume));
+    private trackLoadVersion = 0;
+    private isVolumeFading = false;
 
     constructor() {
         this.audio.autoplay = true;
@@ -88,7 +100,9 @@ class AudioManager {
                     const idx = get(currentTrackIndex);
                     const track = q[idx];
                     if (track?.id === failedTrackId) {
-                        this.loadTrack(track);
+                        const version = ++this.trackLoadVersion;
+                        this.stopCurrentAudio();
+                        this.loadTrack(track, {version}).catch(console.error);
                         return;
                     }
                 }
@@ -108,7 +122,10 @@ class AudioManager {
             window.vinlienElectron?.updatePlayState?.(play);
         });
 
-        volume.subscribe(v => this.audio.volume = v);
+        volume.subscribe(v => {
+            this.targetVolume = normalizedVolume(v);
+            if (!this.isVolumeFading) this.audio.volume = this.targetVolume;
+        });
         isMuted.subscribe(m => this.audio.muted = m);
 
         currentTrack.subscribe(track => {
@@ -117,6 +134,8 @@ class AudioManager {
                     if (get(isPlaying) && this.audio.src) this.audio.play().catch(() => {});
                     return;
                 }
+
+                const version = ++this.trackLoadVersion;
 
                 this.trackStartTimeMs = Date.now();
                 this.preloadAttemptedForTrack = null;
@@ -129,7 +148,6 @@ class AudioManager {
                 apiRequest('/api/history', {method: 'POST', body: track}).catch(() => {});
                 this.reportPlaybackEvent(track, 'started', 0, false).catch(() => {});
 
-                this.loadTrack(track);
                 const artwork = trackArtworkUrl(track, get(enrichedArtworkByTrackId)) || '';
 
                 if ('mediaSession' in navigator) {
@@ -165,23 +183,59 @@ class AudioManager {
                 }
 
                 this.populateRecommendationsIfNeeded().catch(console.error);
-            } else {
-                this.loadingForTrackId = null;
-                this.audio.pause();
-                this.audio.removeAttribute('src');
-                if (this.currentBlobUrl) {
-                    URL.revokeObjectURL(this.currentBlobUrl);
-                    this.currentBlobUrl = null;
-                }
 
-                if (window.vinlienElectron) {
-                    window.vinlienElectron.updateMedia({title: '', artist: ''});
+                if (this.shouldFadeCurrentTrack()) {
+                    this.transitionToTrackWithFade(track, version).catch(console.error);
+                } else {
+                    this.stopCurrentAudio();
+                    this.loadTrack(track, {version}).catch(console.error);
                 }
+            } else {
+                const version = ++this.trackLoadVersion;
+                queueMicrotask(() => {
+                    if (version !== this.trackLoadVersion || get(currentTrack)) return;
+
+                    this.loadingForTrackId = null;
+                    this.stopCurrentAudio();
+                    if (this.currentBlobUrl) {
+                        URL.revokeObjectURL(this.currentBlobUrl);
+                        this.currentBlobUrl = null;
+                    }
+
+                    if (window.vinlienElectron) {
+                        window.vinlienElectron.updateMedia({title: '', artist: ''});
+                    }
+                });
             }
         });
     }
 
-    private async loadTrack(track: Track): Promise<void> {
+    private shouldFadeCurrentTrack(): boolean {
+        return get(isPlaying) && !!this.audio.src && !this.audio.paused && !this.audio.ended;
+    }
+
+    private stopCurrentAudio(): void {
+        this.audio.pause();
+        this.audio.removeAttribute('src');
+        this.audio.load();
+        this.audio.volume = this.targetVolume;
+        this.isVolumeFading = false;
+    }
+
+    private async transitionToTrackWithFade(track: Track, version: number): Promise<void> {
+        const faded = await this.fadeAudioVolume(this.audio.volume, 0, TRACK_FADE_OUT_MS, version);
+        if (!faded || version !== this.trackLoadVersion) return;
+
+        this.audio.pause();
+        this.audio.removeAttribute('src');
+        this.audio.load();
+        await this.loadTrack(track, {version, fadeIn: true});
+    }
+
+    private async loadTrack(
+        track: Track,
+        {version, fadeIn = false}: {version: number; fadeIn?: boolean}
+    ): Promise<void> {
         this.loadingForTrackId = track.id;
 
         if (this.currentBlobUrl) {
@@ -191,7 +245,7 @@ class AudioManager {
 
         const cachedUrl = await getCachedTrackUrl(track.id);
 
-        if (this.loadingForTrackId !== track.id) {
+        if (version !== this.trackLoadVersion || this.loadingForTrackId !== track.id) {
             if (cachedUrl) URL.revokeObjectURL(cachedUrl);
             return;
         }
@@ -201,14 +255,57 @@ class AudioManager {
             this.audio.src = cachedUrl;
             resolvedStreamUrl.set('offline');
             resolvedStreamProvider.set('Offline');
-            if (get(isPlaying)) this.audio.play().catch(() => {});
+            this.playLoadedTrack({version, fadeIn});
         } else {
-            const loaded = await this.resolveAndLoadStream(track);
-            if (loaded && get(isPlaying)) this.audio.play().catch(() => {});
+            const loaded = await this.resolveAndLoadStream(track, version);
+            if (loaded) this.playLoadedTrack({version, fadeIn});
         }
     }
 
-    private async resolveAndLoadStream(track: Track): Promise<boolean> {
+    private playLoadedTrack({version, fadeIn}: {version: number; fadeIn: boolean}): void {
+        if (version !== this.trackLoadVersion || !get(isPlaying)) return;
+
+        if (fadeIn) {
+            this.audio.volume = 0;
+            this.audio.play().catch(() => {});
+            this.fadeAudioVolume(0, this.targetVolume, TRACK_FADE_IN_MS, version).catch(console.error);
+        } else {
+            this.audio.volume = this.targetVolume;
+            this.audio.play().catch(() => {});
+        }
+    }
+
+    private async fadeAudioVolume(from: number, to: number, durationMs: number, version: number): Promise<boolean> {
+        if (durationMs <= 0 || version !== this.trackLoadVersion) return false;
+
+        this.isVolumeFading = true;
+        const start = performance.now();
+
+        return new Promise(resolve => {
+            const step = (now: number) => {
+                if (version !== this.trackLoadVersion) {
+                    this.isVolumeFading = false;
+                    resolve(false);
+                    return;
+                }
+
+                const progress = Math.min(1, (now - start) / durationMs);
+                this.audio.volume = from + ((to - from) * progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    this.audio.volume = to;
+                    this.isVolumeFading = false;
+                    resolve(true);
+                }
+            };
+
+            requestAnimationFrame(step);
+        });
+    }
+
+    private async resolveAndLoadStream(track: Track, version: number): Promise<boolean> {
         try {
             const params = new URLSearchParams({
                 id: track.id,
@@ -219,11 +316,11 @@ class AudioManager {
             if (track.streamUrl) params.set('streamUrl', track.streamUrl);
 
             const resp = await fetch(`/api/stream?${params}`);
-            if (this.loadingForTrackId !== track.id) return false;
+            if (version !== this.trackLoadVersion || this.loadingForTrackId !== track.id) return false;
 
             if (resp.ok) {
                 const data = await resp.json();
-                if (this.loadingForTrackId !== track.id) return false;
+                if (version !== this.trackLoadVersion || this.loadingForTrackId !== track.id) return false;
                 resolvedStreamUrl.set(data.streamUrl);
                 resolvedStreamProvider.set(data.provider);
                 this.audio.src = data.streamUrl;

@@ -239,7 +239,7 @@
                     </svg>
                 </button>
                 {#if $showVolumeSlider}
-                    <input type="range" class="volume-slider action-vol" min="0" max="1" step="0.01"
+                    <input type="range" class="volume-slider action-vol" min="0" max="1" step="0.001"
                            bind:value={$volume} on:click|stopPropagation/>
                 {/if}
                 {#if !isDesktopExpanded}
