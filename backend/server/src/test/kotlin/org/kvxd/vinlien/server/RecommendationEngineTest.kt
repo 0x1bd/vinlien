@@ -1,6 +1,7 @@
 package org.kvxd.vinlien.server
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.kvxd.vinlien.shared.models.media.Track
 
@@ -87,6 +88,59 @@ class RecommendationEngineTest {
 
         assertTrue(skippedScore < sameArtistScore, "The skipped track itself should cool down")
         assertTrue(sameArtistScore > unrelatedScore, "A skip must not become an artist-level dislike")
+    }
+
+    @Test
+    fun `recent session artists are avoided when alternatives exist`() {
+        val engine = RecommendationEngine()
+        val played = track("played", "First Song", "Glass Harbor", "Quiet Rooms")
+        val sameArtist = track("same-artist", "Another Song", "Glass Harbor", "Quiet Rooms")
+        val newArtist = track("new-artist", "Open Window", "New Artist", "New Album")
+
+        val vector = engine.buildListeningVector(
+            history = listOf(RecommendationEngine.HistoryEntry(played.id, played.artist, 1L)),
+            skips = emptyList(),
+            tasteSignals = listOf(TasteTrackSignal(played, 8.0, 1L, "history")),
+            tasteCapsules = TasteGraph.buildCapsules(listOf(TasteTrackSignal(played, 8.0, 1L, "history"))),
+            nowMs = 2L
+        )
+
+        val result = engine.pickWithDiversity(
+            candidates = listOf(sameArtist, newArtist),
+            vector = vector,
+            recentPlayedIds = emptySet(),
+            sessionArtists = listOf("Glass Harbor", "Glass Harbor", "Glass Harbor"),
+            noveltyBudget = 0.30f
+        )
+
+        assertEquals("new artist", result?.first?.artist?.normArtist())
+    }
+
+    @Test
+    fun `radio queue prefers unique artists before repeating`() {
+        val engine = RecommendationEngine()
+        val first = track("a1", "First Song", "Glass Harbor", "Quiet Rooms")
+        val second = track("a2", "Second Song", "Glass Harbor", "Quiet Rooms")
+        val other = track("b1", "Open Window", "New Artist", "New Album")
+
+        val vector = engine.buildListeningVector(
+            history = listOf(RecommendationEngine.HistoryEntry(first.id, first.artist, 1L)),
+            skips = emptyList(),
+            tasteSignals = listOf(TasteTrackSignal(first, 8.0, 1L, "history")),
+            tasteCapsules = TasteGraph.buildCapsules(listOf(TasteTrackSignal(first, 8.0, 1L, "history"))),
+            nowMs = 2L
+        )
+
+        val queue = engine.buildRadioQueue(
+            candidates = listOf(first, second, other),
+            vector = vector,
+            recentPlayedIds = emptySet(),
+            sessionArtists = emptyList(),
+            queueSize = 2,
+            noveltyBudget = 0.30f
+        )
+
+        assertEquals(2, queue.map { it.track.artist.normArtist() }.toSet().size)
     }
 
     private fun track(id: String, title: String, artist: String, album: String): Track =

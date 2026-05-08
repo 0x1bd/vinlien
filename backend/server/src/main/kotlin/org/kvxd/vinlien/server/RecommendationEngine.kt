@@ -143,11 +143,16 @@ class RecommendationEngine {
         candidates: List<Pair<Track, Double>>,
         temperature: Float,
         blockedArtist: String? = null,
-        forceNoveltyFrom: Set<String>? = null
+        forceNoveltyFrom: Set<String>? = null,
+        preferArtistsOutside: Set<String> = emptySet()
     ): Track? {
         var pool = candidates.filter { (_, s) -> s.isFinite() }
         if (pool.isEmpty()) return null
 
+        if (preferArtistsOutside.isNotEmpty()) {
+            val freshArtists = pool.filter { (t, _) -> t.artist.normArtist() !in preferArtistsOutside }
+            if (freshArtists.isNotEmpty()) pool = freshArtists
+        }
         if (forceNoveltyFrom != null) {
             val novel = pool.filter { (t, _) -> t.artist.normArtist() !in forceNoveltyFrom }
             if (novel.isNotEmpty()) pool = novel
@@ -186,17 +191,36 @@ class RecommendationEngine {
 
         val activeCapsules = TasteGraph.activeCapsules(vector.tasteCapsules, contextTracks, limit = 3)
         val contextFeatures = TasteGraph.centroid(contextTracks.takeLast(12).map(TasteGraph::extractFeatures))
+        val selectedArtists = selectedTracks.map { it.artist.normArtist() }.toSet()
+        val recentSessionArtistList = sessionArtists.takeLast(8).map { it.normArtist() }
+        val recentSessionArtists = recentSessionArtistList.toSet()
         val scored = candidates.map { t ->
+            val artist = t.artist.normArtist()
+            val artistScore = vector.artistScores[artist] ?: 0.0
+            val capsuleFit = TasteGraph.capsuleFit(t, activeCapsules)
+            val globalFit = TasteGraph.featureSimilarity(t, vector.globalFeatureCentroid)
             val redundancy = selectedTracks.maxOfOrNull { selected -> TasteGraph.featureSimilarity(t, selected) } ?: 0.0
-            val sameArtistSelected = selectedTracks.any { it.artist.normArtist() == t.artist.normArtist() }
-            val noveltyLift = if ((vector.artistScores[t.artist.normArtist()] ?: 0.0) < 0.08 &&
-                TasteGraph.capsuleFit(t, activeCapsules) >= 0.16
-            ) noveltyBudget * 12.0 else 0.0
+            val sameArtistSelected = artist in selectedArtists
+            val freshArtist = artistScore < 0.08
+            val noveltyLift = when {
+                freshArtist && capsuleFit >= 0.16 -> noveltyBudget * (16.0 + globalFit * 14.0)
+                freshArtist && globalFit >= 0.10 -> noveltyBudget * 8.0
+                artistScore < 0.22 -> noveltyBudget * 5.0
+                else -> 0.0
+            }
+            val familiarArtistPenalty = if (artist in vector.topFamiliarArtists) {
+                noveltyBudget * (5.0 + artistScore * 12.0)
+            } else {
+                0.0
+            }
+            val sessionRepeatPenalty = recentSessionArtistList.count { it == artist } * (6.0 + noveltyBudget * 10.0)
 
             val score = scoreCandidate(t, vector, recentPlayedIds, contextFeatures, activeCapsules) +
                     noveltyLift -
+                    familiarArtistPenalty -
+                    sessionRepeatPenalty -
                     redundancy * (34.0 + noveltyBudget * 38.0) -
-                    if (sameArtistSelected) 10.0 else 0.0
+                    if (sameArtistSelected) 28.0 + noveltyBudget * 24.0 else 0.0
             t to score
         }
 
@@ -214,12 +238,14 @@ class RecommendationEngine {
         }
 
         val temperature = 8f + noveltyBudget * 27f
+        val preferOutsideArtists = selectedArtists + recentSessionArtists
 
         val pick = sampleSoftmax(
             scored,
             temperature,
             blockedArtist,
-            if (forceNovelty) vector.topFamiliarArtists else null
+            if (forceNovelty) vector.topFamiliarArtists else null,
+            preferOutsideArtists
         ) ?: return null
 
         return pick to buildReason(pick, vector, contextTracks)

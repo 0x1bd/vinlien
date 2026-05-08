@@ -333,8 +333,7 @@ class DeezerMetadataProvider : MusicProvider {
                 apiUrl("search/artist", "q" to name, "limit" to "5"),
                 "ARTIST_LOOKUP"
             )
-            val exact = res.data.firstOrNull { it.name?.equals(name, ignoreCase = true) == true }
-            (exact ?: res.data.firstOrNull())?.id
+            res.data.firstOrNull { it.name?.equals(name, ignoreCase = true) == true }?.id
         } catch (e: Exception) {
             BackendDebugger.logError(id, "ARTIST_LOOKUP", e)
             null

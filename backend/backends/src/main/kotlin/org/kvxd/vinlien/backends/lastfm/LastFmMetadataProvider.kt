@@ -21,6 +21,12 @@ import java.net.URLEncoder
 
 private const val PLACEHOLDER_IMAGE_HASH = "2a96cbd8b46e442fc41c2b86b821562f"
 
+private fun String.artistIdentityKey(): String =
+    lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), "").trim().replace(Regex("\\s+"), " ")
+
+private fun String.isSameArtistIdentityAs(other: String): Boolean =
+    artistIdentityKey() == other.artistIdentityKey()
+
 @Serializable
 private data class LfmResponse(
     val results: LfmResults? = null,
@@ -294,7 +300,7 @@ class LastFmMetadataProvider(
     override suspend fun getArtistAlbums(artist: String): List<Album> = withContext(Dispatchers.IO) {
         try {
             val res = fetchParsed(
-                apiUrl("artist.gettopalbums", "artist" to artist, "autocorrect" to "1", "limit" to "50")
+                apiUrl("artist.gettopalbums", "artist" to artist, "autocorrect" to "0", "limit" to "50")
             )
             res.topalbums?.album.parseLfmList<LfmTopAlbumItem>().mapNotNull { item ->
                 val title = item.name ?: return@mapNotNull null
@@ -303,9 +309,7 @@ class LastFmMetadataProvider(
                     is JsonPrimitive -> a.content
                     else -> artist
                 }
-                if (!artistName.equals(artist, ignoreCase = true) && !artistName.contains(artist, ignoreCase = true)) {
-                    return@mapNotNull null
-                }
+                if (!artistName.isSameArtistIdentityAs(artist)) return@mapNotNull null
                 val artworkUrl = item.image.lastOrNull()?.text
                     ?.takeIf { it.isNotBlank() && !it.contains(PLACEHOLDER_IMAGE_HASH) }
                 Album(
@@ -323,9 +327,11 @@ class LastFmMetadataProvider(
     override suspend fun getArtistTopTracks(artist: String): List<Track> = withContext(Dispatchers.IO) {
         try {
             val res = fetchParsed(
-                apiUrl("artist.gettoptracks", "artist" to artist, "autocorrect" to "1", "limit" to "50")
+                apiUrl("artist.gettoptracks", "artist" to artist, "autocorrect" to "0", "limit" to "50")
             )
-            res.toptracks?.track.parseLfmList<LfmTrack>().mapNotNull { it.toTrack(fallbackArtist = artist) }
+            res.toptracks?.track.parseLfmList<LfmTrack>()
+                .mapNotNull { it.toTrack(fallbackArtist = artist) }
+                .filter { it.artist.isSameArtistIdentityAs(artist) }
         } catch (e: Exception) {
             emptyList()
         }
@@ -335,11 +341,13 @@ class LastFmMetadataProvider(
         try {
             val params = buildList {
                 add("artist" to name)
-                add("autocorrect" to "1")
+                add("autocorrect" to "0")
                 if (username.isNotBlank()) add("username" to username)
             }
             val res = fetchParsed(apiUrl("artist.getinfo", *params.toTypedArray()))
             val artistObj = res.artist ?: return@withContext null
+            val resolvedName = artistObj.name ?: name
+            if (!resolvedName.isSameArtistIdentityAs(name)) return@withContext null
 
             val rawBio = artistObj.bio?.summary ?: ""
             val cleanBio = rawBio.substringBefore("<a href").trim()
@@ -350,7 +358,7 @@ class LastFmMetadataProvider(
             }
 
             ArtistInfo(
-                name = artistObj.name ?: name,
+                name = resolvedName,
                 bio = cleanBio,
                 tags = tags,
                 imageUrl = imageUrl

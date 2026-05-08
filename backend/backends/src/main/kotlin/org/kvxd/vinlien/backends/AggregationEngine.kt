@@ -134,13 +134,21 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
 
     suspend fun getArtistAlbums(artist: String): List<Album> {
         val raw = parallelQuery(Capability.ARTIST_ALBUMS) { it.getArtistAlbums(artist) }.flatten()
-        val dedup = AlbumMerger.dedup(raw.map { Normalizer.normalizeAlbum(it) })
+        val dedup = AlbumMerger.dedup(
+            raw
+                .filter { it.artist.sameArtistIdentityAs(artist) }
+                .map { Normalizer.normalizeAlbum(it) }
+        )
         return deduplicateAlbumVariants(dedup)
     }
 
     suspend fun getArtistTopTracks(artist: String): List<Track> {
         val raw = parallelQuery(Capability.ARTIST_TOP_TRACKS) { it.getArtistTopTracks(artist) }.flatten()
-        return TrackMerger.merge(raw.map { Normalizer.normalizeTrack(it) })
+        return TrackMerger.merge(
+            raw
+                .filter { it.matchesArtistIdentity(artist) }
+                .map { Normalizer.normalizeTrack(it) }
+        )
             .sortedByDescending { it.popularityScore ?: 0.0 }
     }
 
@@ -172,7 +180,7 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
 
     suspend fun getArtistInfo(name: String): ArtistInfo? {
         val results = parallelQuery(Capability.ARTIST_INFO) { it.getArtistInfo(name) }
-        return ArtistInfoMerger.mergeOne(results)
+        return ArtistInfoMerger.mergeOne(results.filter { it.name.sameArtistIdentityAs(name) })
     }
 
     suspend fun getRecommendations(track: Track): List<Track> {
@@ -273,6 +281,15 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         return (if (artworkUrl != null && !artworkUrl.contains("ytimg.com")) 4 else 0) +
                 (if (track.durationMs > 0) 2 else 0) +
                 (if (track.lastFmUrl != null) 1 else 0)
+    }
+
+    private fun String.sameArtistIdentityAs(other: String): Boolean =
+        normalized() == other.normalized()
+
+    private fun Track.matchesArtistIdentity(artist: String): Boolean {
+        val names = artists.ifEmpty { listOf(Normalizer.primaryArtist(this)) }
+        return names.any { it.sameArtistIdentityAs(artist) } ||
+                Normalizer.primaryArtist(this).sameArtistIdentityAs(artist)
     }
 
     suspend fun enrichArtwork(title: String, artist: String): String? {
