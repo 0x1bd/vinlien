@@ -113,17 +113,14 @@ class AudioManager {
 
         currentTrack.subscribe(track => {
             if (track) {
+                if (this.loadingForTrackId === track.id) {
+                    if (get(isPlaying) && this.audio.src) this.audio.play().catch(() => {});
+                    return;
+                }
+
                 this.trackStartTimeMs = Date.now();
                 this.preloadAttemptedForTrack = null;
                 this.lastPositionReportSec = -1;
-
-                const currentSrcId = new URL(this.audio.src || 'http://localhost').searchParams.get('id');
-                const isBlobSrc = this.audio.src?.startsWith('blob:');
-                const blobMatchesCurrent = isBlobSrc && this.loadingForTrackId === track.id;
-                if ((currentSrcId === track.id || blobMatchesCurrent) && this.audio.readyState > 0) {
-                    if (get(isPlaying)) this.audio.play().catch(() => {});
-                    return;
-                }
 
                 audioProgress.set(0);
                 currentTimeDisplay.set("0:00");
@@ -203,16 +200,14 @@ class AudioManager {
             this.audio.src = cachedUrl;
             resolvedStreamUrl.set('offline');
             resolvedStreamProvider.set('Offline');
-            this.audio.load();
             if (get(isPlaying)) this.audio.play().catch(() => {});
         } else {
-            await this.resolveAndLoadStream(track);
-            this.audio.load();
-            if (get(isPlaying)) this.audio.play().catch(() => {});
+            const loaded = await this.resolveAndLoadStream(track);
+            if (loaded && get(isPlaying)) this.audio.play().catch(() => {});
         }
     }
 
-    private async resolveAndLoadStream(track: Track): Promise<void> {
+    private async resolveAndLoadStream(track: Track): Promise<boolean> {
         try {
             const params = new URLSearchParams({
                 id: track.id,
@@ -223,11 +218,15 @@ class AudioManager {
             if (track.streamUrl) params.set('streamUrl', track.streamUrl);
 
             const resp = await fetch(`/api/stream?${params}`);
+            if (this.loadingForTrackId !== track.id) return false;
+
             if (resp.ok) {
                 const data = await resp.json();
+                if (this.loadingForTrackId !== track.id) return false;
                 resolvedStreamUrl.set(data.streamUrl);
                 resolvedStreamProvider.set(data.provider);
                 this.audio.src = data.streamUrl;
+                return true;
             } else {
                 let errorMsg = `Cannot play "${track.title}"`;
                 try {
@@ -239,13 +238,17 @@ class AudioManager {
                 addToast(errorMsg, 'error');
                 resolvedStreamUrl.set(null);
                 resolvedStreamProvider.set(null);
+                if (this.loadingForTrackId === track.id) this.loadingForTrackId = null;
             }
         } catch (e) {
+            if (this.loadingForTrackId !== track.id) return false;
             console.error('[audio] Stream resolution error:', e);
             addToast(`Cannot play "${track.title}": Network error`, 'error');
             resolvedStreamUrl.set(null);
             resolvedStreamProvider.set(null);
+            this.loadingForTrackId = null;
         }
+        return false;
     }
 
     private updatePositionState() {
@@ -363,7 +366,6 @@ class AudioManager {
             const resolvedUrl = await this.resolveStreamUrl(nextTrack);
             if (resolvedUrl) {
                 this.preloadAudio.src = resolvedUrl;
-                this.preloadAudio.load();
             }
         }
     }
