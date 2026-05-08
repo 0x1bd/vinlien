@@ -118,6 +118,7 @@ fun Application.module() {
             recRoutes(engine, recEngine)
             adminRoutes()
             playlistRoutes()
+            preferenceRoutes()
         }
 
         val frontendDist = listOf("frontend/build", "../../frontend/build", "../frontend/build")

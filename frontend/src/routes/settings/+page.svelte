@@ -6,6 +6,42 @@
 
     let isDeleting = false;
     let deleteMessage = '';
+    let isImporting = false;
+    let importMessage = '';
+    let importFileInput: HTMLInputElement;
+
+    type ImportResponse = {
+        source: string;
+        imported: number;
+        skipped: number;
+        message: string;
+    };
+
+    async function importPreferences(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        isImporting = true;
+        importMessage = '';
+
+        try {
+            const content = await file.text();
+            const result = await apiRequest('/api/preferences/import', {
+                method: 'POST',
+                body: {
+                    fileName: file.name,
+                    content
+                }
+            }) as ImportResponse;
+            importMessage = result.message;
+        } catch (e: unknown) {
+            importMessage = e instanceof Error ? `Import failed: ${e.message}` : 'Import failed.';
+        } finally {
+            isImporting = false;
+            input.value = '';
+        }
+    }
 
     async function deleteData() {
         if (!confirm('Are you absolutely sure? This will delete all your play history, playlists, and taste data. This action cannot be undone.')) {
@@ -83,6 +119,30 @@
             <input type="checkbox" bind:checked={$continuePlaylist}>
             <span class="slider"></span>
         </label>
+    </div>
+
+    <div class="setting-item import-setting">
+        <div class="info">
+            <h3>Import Taste Data</h3>
+            <p>Add preference signals from Spotify history, YouTube Takeout, or a CSV with title and artist columns.</p>
+            {#if importMessage}
+                <p class="import-msg" class:error={importMessage.includes('failed') || importMessage.includes('No new playable')}>{importMessage}</p>
+            {/if}
+        </div>
+        <input
+            bind:this={importFileInput}
+            class="file-input"
+            type="file"
+            accept=".json,.csv,application/json,text/csv"
+            on:change={importPreferences}
+        >
+        <button
+            class="import-button"
+            on:click={() => importFileInput?.click()}
+            disabled={isImporting}
+        >
+            {isImporting ? 'Importing...' : 'Import File'}
+        </button>
     </div>
 
     <div class="setting-item">
@@ -290,6 +350,47 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 20px;
+    }
+
+    .import-setting {
+        align-items: flex-start;
+    }
+
+    .file-input {
+        display: none;
+    }
+
+    .import-button {
+        flex-shrink: 0;
+        background: var(--accent-color);
+        color: white;
+        padding: 10px 18px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .import-button:hover:not(:disabled) {
+        opacity: 0.9;
+    }
+
+    .import-button:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    .import-button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .import-msg {
+        margin-top: 10px;
+        color: var(--accent-color);
+        font-weight: 500;
+    }
+
+    .import-msg.error {
+        color: var(--danger-color, #ff4444);
     }
 
     .kb-grid {
