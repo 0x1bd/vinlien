@@ -143,9 +143,82 @@ class StreamResolverTest {
         assertEquals("ytmusic", result.providerId)
     }
 
+    @Test
+    fun `provider failure falls back to next similarly scored candidate`() = runTest {
+        val soundCloud = FakeAudioProvider(
+            Track(
+                id = "sc:vor-gericht",
+                artist = "Alligatoah",
+                title = "Vor Gericht",
+                durationMs = 200_000L
+            ),
+            id = "sc",
+            resolveFailureReason = "SoundCloud stream failed"
+        )
+        val youtubeMusic = FakeAudioProvider(
+            Track(
+                id = "ytmusic:vor-gericht",
+                artist = "Alligatoah",
+                title = "Vor Gericht",
+                durationMs = 200_000L
+            ),
+            id = "ytmusic"
+        )
+        val resolver = StreamResolver(listOf(soundCloud, youtubeMusic))
+
+        val result = resolver.resolveWithProvider(
+            Track(
+                id = "sc:original",
+                artist = "Alligatoah",
+                title = "Vor Gericht",
+                durationMs = 200_000L
+            )
+        )
+
+        assertEquals("https://streams.test/ytmusic:vor-gericht", result.streamUrl)
+        assertEquals("ytmusic", result.providerId)
+    }
+
+    @Test
+    fun `excluded provider is skipped during stream resolution`() = runTest {
+        val soundCloud = FakeAudioProvider(
+            Track(
+                id = "sc:vor-gericht",
+                artist = "Alligatoah",
+                title = "Vor Gericht",
+                durationMs = 200_000L
+            ),
+            id = "sc"
+        )
+        val youtubeMusic = FakeAudioProvider(
+            Track(
+                id = "ytmusic:vor-gericht",
+                artist = "Alligatoah",
+                title = "Vor Gericht",
+                durationMs = 200_000L
+            ),
+            id = "ytmusic"
+        )
+        val resolver = StreamResolver(listOf(soundCloud, youtubeMusic))
+
+        val result = resolver.resolveWithProvider(
+            Track(
+                id = "sc:original",
+                artist = "Alligatoah",
+                title = "Vor Gericht",
+                durationMs = 200_000L
+            ),
+            excludedProviderIds = setOf("sc")
+        )
+
+        assertEquals("https://streams.test/ytmusic:vor-gericht", result.streamUrl)
+        assertEquals("ytmusic", result.providerId)
+    }
+
     private class FakeAudioProvider(
         private vararg val tracks: Track,
-        override val id: String = "stream"
+        override val id: String = "stream",
+        private val resolveFailureReason: String? = null
     ) : MusicProvider {
         override val name = "Stream"
         override val capabilities = setOf(Capability.AUDIO_STREAM)
@@ -153,6 +226,7 @@ class StreamResolverTest {
         override suspend fun searchAudio(query: String): List<Track> = tracks.toList()
 
         override suspend fun resolveStream(track: Track): StreamResolutionResult =
-            StreamResolutionResult.Success("https://streams.test/${track.id}", id)
+            resolveFailureReason?.let { StreamResolutionResult.Failure(id, it) }
+                ?: StreamResolutionResult.Success("https://streams.test/${track.id}", id)
     }
 }

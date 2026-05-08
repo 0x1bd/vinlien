@@ -47,6 +47,7 @@ class AudioManager {
     private currentBlobUrl: string | null = null;
     private loadingForTrackId: string | null = null;
     private streamRetried = new Set<string>();
+    private activeStreamProviderId: string | null = null;
     private trackStartTimeMs = 0;
     private targetVolume = normalizedVolume(get(volume));
     private trackLoadVersion = 0;
@@ -93,6 +94,7 @@ class AudioManager {
             if (!this.audio.src || !get(isPlaying) || !failedTrackId) return;
 
             if (!this.streamRetried.has(failedTrackId)) {
+                const failedProviderId = this.activeStreamProviderId;
                 this.streamRetried.add(failedTrackId);
                 try { await fetch('/api/auth/refresh', {method: 'POST', credentials: 'include'}); } catch {}
                 if (this.loadingForTrackId === failedTrackId) {
@@ -102,7 +104,10 @@ class AudioManager {
                     if (track?.id === failedTrackId) {
                         const version = ++this.trackLoadVersion;
                         this.stopCurrentAudio();
-                        this.loadTrack(track, {version}).catch(console.error);
+                        this.loadTrack(track, {
+                            version,
+                            excludedProviderIds: failedProviderId ? [failedProviderId] : []
+                        }).catch(console.error);
                         return;
                     }
                 }
@@ -220,6 +225,7 @@ class AudioManager {
         this.audio.load();
         this.audio.volume = this.targetVolume;
         this.isVolumeFading = false;
+        this.activeStreamProviderId = null;
     }
 
     private async transitionToTrackWithFade(track: Track, version: number): Promise<void> {
@@ -234,7 +240,11 @@ class AudioManager {
 
     private async loadTrack(
         track: Track,
-        {version, fadeIn = false}: {version: number; fadeIn?: boolean}
+        {
+            version,
+            fadeIn = false,
+            excludedProviderIds = []
+        }: {version: number; fadeIn?: boolean; excludedProviderIds?: string[]}
     ): Promise<void> {
         this.loadingForTrackId = track.id;
 
@@ -253,11 +263,12 @@ class AudioManager {
         if (cachedUrl) {
             this.currentBlobUrl = cachedUrl;
             this.audio.src = cachedUrl;
+            this.activeStreamProviderId = null;
             resolvedStreamUrl.set('offline');
             resolvedStreamProvider.set('Offline');
             this.playLoadedTrack({version, fadeIn});
         } else {
-            const loaded = await this.resolveAndLoadStream(track, version);
+            const loaded = await this.resolveAndLoadStream(track, version, excludedProviderIds);
             if (loaded) this.playLoadedTrack({version, fadeIn});
         }
     }
@@ -305,7 +316,11 @@ class AudioManager {
         });
     }
 
-    private async resolveAndLoadStream(track: Track, version: number): Promise<boolean> {
+    private async resolveAndLoadStream(
+        track: Track,
+        version: number,
+        excludedProviderIds: string[] = []
+    ): Promise<boolean> {
         try {
             const params = new URLSearchParams({
                 id: track.id,
@@ -314,6 +329,9 @@ class AudioManager {
                 durationMs: String(track.durationMs || 0),
             });
             if (track.streamUrl) params.set('streamUrl', track.streamUrl);
+            if (excludedProviderIds.length > 0) {
+                params.set('excludeProviders', excludedProviderIds.join(','));
+            }
 
             const resp = await fetch(`/api/stream?${params}`);
             if (version !== this.trackLoadVersion || this.loadingForTrackId !== track.id) return false;
@@ -323,6 +341,7 @@ class AudioManager {
                 if (version !== this.trackLoadVersion || this.loadingForTrackId !== track.id) return false;
                 resolvedStreamUrl.set(data.streamUrl);
                 resolvedStreamProvider.set(data.provider);
+                this.activeStreamProviderId = data.providerId ?? null;
                 this.audio.src = data.streamUrl;
                 return true;
             } else {
@@ -336,6 +355,7 @@ class AudioManager {
                 addToast(errorMsg, 'error');
                 resolvedStreamUrl.set(null);
                 resolvedStreamProvider.set(null);
+                this.activeStreamProviderId = null;
                 if (this.loadingForTrackId === track.id) this.loadingForTrackId = null;
             }
         } catch (e) {
@@ -344,6 +364,7 @@ class AudioManager {
             addToast(`Cannot play "${track.title}": Network error`, 'error');
             resolvedStreamUrl.set(null);
             resolvedStreamProvider.set(null);
+            this.activeStreamProviderId = null;
             this.loadingForTrackId = null;
         }
         return false;

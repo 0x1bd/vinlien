@@ -48,12 +48,20 @@ data class StreamCandidate(val track: Track, val provider: MusicProvider, val sc
 class StreamResolver(private val providers: List<MusicProvider>) {
     private val logger = LoggerFactory.getLogger(StreamResolver::class.java)
 
-    suspend fun resolve(track: Track, preferredProviderId: String? = null): String =
-        resolveWithProvider(track, preferredProviderId).streamUrl
+    suspend fun resolve(
+        track: Track,
+        preferredProviderId: String? = null,
+        excludedProviderIds: Set<String> = emptySet()
+    ): String =
+        resolveWithProvider(track, preferredProviderId, excludedProviderIds).streamUrl
 
-    suspend fun resolveWithProvider(track: Track, preferredProviderId: String? = null): StreamResolutionResult.Success =
+    suspend fun resolveWithProvider(
+        track: Track,
+        preferredProviderId: String? = null,
+        excludedProviderIds: Set<String> = emptySet()
+    ): StreamResolutionResult.Success =
         Profiler.measure("StreamResolver.resolve(${track.artist} - ${track.title})") {
-            val rankedCandidates = searchAndRankCandidates(track, preferredProviderId)
+            val rankedCandidates = searchAndRankCandidates(track, preferredProviderId, excludedProviderIds)
             logger.info("Stream resolution for '{} - {}': {} ranked candidates",
                 track.artist, track.title, rankedCandidates.size)
 
@@ -69,7 +77,19 @@ class StreamResolver(private val providers: List<MusicProvider>) {
                 logger.info("Trying provider '{}' for candidate '{} - {}' (score={})",
                     candidate.provider.id, candidate.track.artist, candidate.track.title, candidate.score)
 
-                val result = candidate.provider.resolveStream(candidate.track)
+                val result = try {
+                    candidate.provider.resolveStream(candidate.track)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.warn("Provider '{}' threw while resolving '{} - {}': {}",
+                        candidate.provider.id, candidate.track.artist, candidate.track.title, e.message)
+                    StreamResolutionResult.Failure(
+                        providerId = candidate.provider.id,
+                        reason = e.message ?: e::class.simpleName.orEmpty(),
+                        cause = e
+                    )
+                }
                 when (result) {
                     is StreamResolutionResult.Success -> {
                         logger.info("Provider '{}' resolved stream successfully", candidate.provider.id)
@@ -125,14 +145,19 @@ class StreamResolver(private val providers: List<MusicProvider>) {
 
     private suspend fun searchAndRankCandidates(
         track: Track,
-        preferredProviderId: String?
+        preferredProviderId: String?,
+        excludedProviderIds: Set<String>
     ): List<StreamCandidate> {
         val searchQuery = buildSearchQuery(track)
-        val audioProviders = providers.filter { Capability.AUDIO_STREAM in it.capabilities }
+        val normalizedExclusions = excludedProviderIds.map { it.lowercase() }.toSet()
+        val audioProviders = providers.filter {
+            Capability.AUDIO_STREAM in it.capabilities && it.id.lowercase() !in normalizedExclusions
+        }
         logger.info("Searching {} audio providers with query: '{}'", audioProviders.size, searchQuery)
 
         val nativeCandidate = findNativeProvider(track)?.let { nativeProvider ->
-            StreamCandidate(track, nativeProvider, scoreMatch(track, track))
+            if (nativeProvider.id.lowercase() in normalizedExclusions) null
+            else StreamCandidate(track, nativeProvider, scoreMatch(track, track))
         }
 
         val candidates = coroutineScope {

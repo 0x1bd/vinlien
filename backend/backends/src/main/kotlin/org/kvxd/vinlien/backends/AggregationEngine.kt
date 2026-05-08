@@ -333,14 +333,19 @@ class AggregationEngine(private val providers: List<MusicProvider>) {
         return TrackMerger.merge(raw.map { Normalizer.normalizeTrack(it) })
     }
 
-    suspend fun resolveStream(track: Track, preferredProviderId: String? = null): String =
-        streamResolver.resolve(track, preferredProviderId)
+    suspend fun resolveStream(
+        track: Track,
+        preferredProviderId: String? = null,
+        excludedProviderIds: Set<String> = emptySet()
+    ): String =
+        streamResolver.resolve(track, preferredProviderId, excludedProviderIds)
 
     suspend fun resolveStreamWithProvider(
         track: Track,
-        preferredProviderId: String? = null
+        preferredProviderId: String? = null,
+        excludedProviderIds: Set<String> = emptySet()
     ): StreamResolutionResult.Success =
-        streamResolver.resolveWithProvider(track, preferredProviderId)
+        streamResolver.resolveWithProvider(track, preferredProviderId, excludedProviderIds)
 
     private fun fuzzyMatch(candidate: Track, target: Track): Boolean {
         val candidateTitle = candidate.title.normalized()

@@ -10,7 +10,7 @@ import org.kvxd.vinlien.shared.models.media.Track
 import org.slf4j.LoggerFactory
 
 @Serializable
-data class StreamResponse(val streamUrl: String, val provider: String)
+data class StreamResponse(val streamUrl: String, val provider: String, val providerId: String)
 
 @Serializable
 data class StreamErrorResponse(val error: String, val details: String? = null)
@@ -27,20 +27,31 @@ fun Route.streamRoutes(engine: AggregationEngine) {
         val durationMs = call.request.queryParameters["durationMs"]?.toLongOrNull() ?: 0L
         val preferred = call.request.queryParameters["providers"]?.lowercase()
             ?.split(",")?.firstOrNull { it.isNotEmpty() }
+        val excludedProviders = call.request.queryParameters["excludeProviders"]
+            ?.lowercase()
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.toSet()
+            ?: emptySet()
 
         if (id.isBlank() || title.isBlank()) {
             logger.warn("Rejecting stream request: Missing ID or Title (id='$id', title='$title')")
             return@get call.respond(HttpStatusCode.BadRequest, StreamErrorResponse(error = "Missing track ID or title"))
         }
 
-        val cacheKey = id
+        val cacheKey = listOf(
+            id,
+            "preferred=${preferred.orEmpty()}",
+            "exclude=${excludedProviders.sorted().joinToString(",")}"
+        ).joinToString("|")
         val cached = streamCache.get(cacheKey)
         if (cached != null) {
             return@get call.respond(cached)
         }
 
         val track = Track(id = id, artist = artist, title = title, durationMs = durationMs, streamUrl = streamUrl)
-        val resolveResult = runCatching { engine.resolveStreamWithProvider(track, preferred) }
+        val resolveResult = runCatching { engine.resolveStreamWithProvider(track, preferred, excludedProviders) }
 
         if (resolveResult.isFailure) {
             val exception = resolveResult.exceptionOrNull()
@@ -60,7 +71,7 @@ fun Route.streamRoutes(engine: AggregationEngine) {
 
         val provider = providerLabel(stream.providerId)
 
-        val response = StreamResponse(streamUrl = stream.streamUrl, provider = provider)
+        val response = StreamResponse(streamUrl = stream.streamUrl, provider = provider, providerId = stream.providerId)
         streamCache.put(cacheKey, response)
         call.respond(response)
     }
