@@ -41,8 +41,8 @@ if (browser) {
 export const userPlaylists = createPersistedStore<Playlist[]>('vinlien_playlists', []);
 export const isSidebarOpen = writable(true);
 
-export const queue = writable<Track[]>([]);
-export const currentTrackIndex = writable(-1);
+export const queue = createPersistedStore<Track[]>('vinlien_queue', []);
+export const currentTrackIndex = createPersistedStore<number>('vinlien_trackIndex', -1);
 export const isPlaying = writable(false);
 export const isPlayerExpanded = writable(false);
 

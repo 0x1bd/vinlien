@@ -203,7 +203,7 @@
         background: var(--bg-surface);
         display: flex;
         flex-direction: column;
-        padding: 0 22px 32px;
+        padding: env(safe-area-inset-top, 0px) 22px calc(32px + env(safe-area-inset-bottom, 0px));
         overflow: hidden;
     }
 

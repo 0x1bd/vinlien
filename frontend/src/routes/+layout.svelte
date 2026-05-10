@@ -605,19 +605,18 @@
             display: flex;
             flex-direction: row;
             gap: 0;
-            padding: 0;
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            height: 65px;
+            min-height: 65px;
             background: var(--bg-surface);
             backdrop-filter: blur(10px);
             border-top: 1px solid var(--border-subtle);
             z-index: 110;
             justify-content: space-around;
             align-items: center;
-            padding-bottom: env(safe-area-inset-bottom);
+            padding: 0 0 env(safe-area-inset-bottom);
         }
 
         .mobile-nav-btn {
