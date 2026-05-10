@@ -389,7 +389,7 @@
         <div class="modal-content" on:click|stopPropagation>
             <div class="modal-header">
                 <h3>Edit Details</h3>
-                <button class="icon-btn" on:click={() => { showEditModal = false; showDeleteConfirm = false; }}>
+                <button class="icon-btn" on:click={() => { showEditModal = false; showDeleteConfirm = false; }} aria-label="Close edit dialog">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>

@@ -3,7 +3,7 @@
     import {
         currentTrack, isPlaying, isPlayerExpanded, repeatMode,
         volume, isMuted, showVolumeSlider, trackToAdd,
-        showQueuePanel, userPlaylists
+        showQueuePanel
     } from '$lib/utils/store';
     import {audioManager, audioProgress, currentTimeDisplay, durationDisplay} from '$lib/utils/AudioManager';
     import ArtworkImage from './ArtworkImage.svelte';
@@ -105,6 +105,10 @@
          on:pointerup={onUp}
          on:pointercancel={onUp}
          role="slider"
+         aria-label="Track progress"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-valuenow={Math.round(displayProgress)}
          class:dragging={isDragging}>
         <div class="progress-bg">
             <div class="progress-bar" style="width: {displayProgress}%">
@@ -116,7 +120,6 @@
     {#if $currentTrack}
         <div class="controls">
 
-            <!-- Left: artwork + meta + actions -->
             <div class="data-group">
                 <div class="artwork">
                     <ArtworkImage track={$currentTrack}>
@@ -185,9 +188,8 @@
                 </div>
             </div>
 
-            <!-- Centre: transport -->
             <div class="transport-group">
-                <button class="transport-btn prev-btn" on:click|stopPropagation={() => audioManager.prev()}>
+                <button class="transport-btn prev-btn" on:click|stopPropagation={() => audioManager.prev()} aria-label="Previous track">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
                     </svg>
@@ -203,14 +205,13 @@
                         </svg>
                     {/if}
                 </button>
-                <button class="transport-btn next-btn" on:click|stopPropagation={() => audioManager.playNext(true)}>
+                <button class="transport-btn next-btn" on:click|stopPropagation={() => audioManager.playNext(true)} aria-label="Next track">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
                     </svg>
                 </button>
             </div>
 
-            <!-- Right: secondary controls -->
             <div class="right-group">
                 <div class="time-display desktop-time">
                     <span>{$currentTimeDisplay}</span> / <span>{$durationDisplay}</span>
@@ -244,7 +245,8 @@
                 {/if}
                 {#if !isDesktopExpanded}
                     <button class="action-btn" class:active={$showQueuePanel}
-                            on:click|stopPropagation={() => $showQueuePanel = !$showQueuePanel}>
+                            on:click|stopPropagation={() => $showQueuePanel = !$showQueuePanel}
+                            aria-label="Toggle queue">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              stroke-width="2">
                             <line x1="8" y1="6" x2="21" y2="6"></line>

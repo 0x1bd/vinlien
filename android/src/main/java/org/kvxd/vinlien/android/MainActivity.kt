@@ -224,7 +224,7 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
                 if (window.__vinlienBridgeInstalled) return;
                 window.__vinlienBridgeInstalled = true;
 
-                window.vinlienElectron = {
+                window.vinlienNative = {
                     updateMedia: function(meta) {
                         try {
                             VinlienAndroid.updateMedia(
@@ -247,6 +247,8 @@ class MainActivity : AppCompatActivity(), MusicService.WebCommandListener {
                         try { VinlienAndroid.updatePlayState(!!playing); } catch (e) {}
                     }
                 };
+
+                window.vinlienElectron = window.vinlienElectron || window.vinlienNative;
             })();
         """.trimIndent()
         wv.evaluateJavascript(js, null)

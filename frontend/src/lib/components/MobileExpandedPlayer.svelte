@@ -155,6 +155,10 @@
                  on:pointerup={onPointerUp}
                  on:pointercancel={onPointerUp}
                  role="slider"
+                 aria-label="Track progress"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-valuenow={Math.round(displayProgress)}
                  class:dragging={isDragging}>
                 <div class="mep-progress-bg">
                     <div class="mep-progress-fill" style="width: {displayProgress}%">

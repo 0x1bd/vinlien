@@ -50,5 +50,4 @@ test-output/
 # Coverage
 coverage/
 
-/frontend/package-lock.json
 /data/config.json

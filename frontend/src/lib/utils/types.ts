@@ -102,13 +102,29 @@ export interface RadioResponse {
     seedTrack: Track;
 }
 
+export interface NativeMediaMetadata {
+    title: string;
+    artist: string;
+    album?: string;
+    artwork?: string | null;
+}
+
+export interface NativePlaybackPosition {
+    position: number;
+    duration: number;
+}
+
+export interface VinlienNativeBridge {
+    updateMedia: (metadata: NativeMediaMetadata) => void;
+    updatePosition: (times: NativePlaybackPosition) => void;
+    updatePlayState?: (playing: boolean) => void;
+}
+
 declare global {
     interface Window {
-        vinlienElectron?: {
-            updateMedia: (metadata: { title: string; artist: string; album?: string; artwork?: string | null }) => void;
-            updatePosition: (times: { position: number; duration: number }) => void;
-            updatePlayState?: (playing: boolean) => void;
-        };
+        vinlienNative?: VinlienNativeBridge;
+        /** @deprecated Use vinlienNative. */
+        vinlienElectron?: VinlienNativeBridge;
         vinlienControl?: {
             play: () => void;
             pause: () => void;

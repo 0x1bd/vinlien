@@ -17,6 +17,7 @@ import {getCachedTrackUrl} from '$lib/utils/offlineAudio';
 import {enrichedArtworkByTrackId, enrichArtwork, isLowQualityArtwork, trackArtworkUrl} from '$lib/utils/artwork';
 import {addToast} from '$lib/utils/toast';
 import type {Track} from '$lib/utils/types';
+import {nativeBridge} from '$lib/utils/nativeBridge';
 
 export const audioProgress = writable(0);
 export const currentTimeDisplay = writable("0:00");
@@ -126,7 +127,7 @@ class AudioManager {
         isPlaying.subscribe(play => {
             if (play && this.audio.src) this.audio.play().catch(() => {});
             else this.audio.pause();
-            window.vinlienElectron?.updatePlayState?.(play);
+            nativeBridge()?.updatePlayState?.(play);
         });
 
         volume.subscribe(v => {
@@ -176,8 +177,9 @@ class AudioManager {
                     });
                 }
 
-                if (window.vinlienElectron) {
-                    window.vinlienElectron.updateMedia({
+                const bridge = nativeBridge();
+                if (bridge) {
+                    bridge.updateMedia({
                         title: track.title,
                         artist: track.artist,
                         album: track.albumTitle || undefined,
@@ -211,9 +213,7 @@ class AudioManager {
                         this.currentBlobUrl = null;
                     }
 
-                    if (window.vinlienElectron) {
-                        window.vinlienElectron.updateMedia({title: '', artist: ''});
-                    }
+                    nativeBridge()?.updateMedia({title: '', artist: ''});
                 });
             }
         });
@@ -390,8 +390,9 @@ class AudioManager {
             });
         }
 
-        if (window.vinlienElectron && isValidNumber) {
-            window.vinlienElectron.updatePosition({
+        const bridge = nativeBridge();
+        if (bridge && isValidNumber) {
+            bridge.updatePosition({
                 duration: this.audio.duration,
                 position: this.audio.currentTime
             });

@@ -1,35 +1,57 @@
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
 import org.kvxd.vinlien.backends.AggregationEngine
-import org.kvxd.vinlien.backends.itunes.ItunesMetadataProvider
-import org.kvxd.vinlien.backends.lastfm.LastFmMetadataProvider
-import org.kvxd.vinlien.backends.musicbrainz.MusicBrainzMetadataProvider
-import org.kvxd.vinlien.backends.soundcloud.SoundCloudBackend
-import org.kvxd.vinlien.backends.youtube.YoutubeMusicBackend
+import org.kvxd.vinlien.backends.Capability
+import org.kvxd.vinlien.backends.MusicProvider
+import org.kvxd.vinlien.backends.StreamResolutionResult
+import org.kvxd.vinlien.shared.models.media.Album
 import org.kvxd.vinlien.shared.models.media.Track
 import java.util.UUID
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AggregationEngineTest {
 
     private lateinit var engine: AggregationEngine
 
-    private val lastFmKey = System.getenv("LASTFM_API_KEY")
-
-    @BeforeAll
+    @BeforeEach
     fun setup() {
-        val providers = buildList {
-            if (lastFmKey != null) add(LastFmMetadataProvider(lastFmKey))
-            add(ItunesMetadataProvider())
-            add(MusicBrainzMetadataProvider())
-            add(SoundCloudBackend())
-            add(YoutubeMusicBackend("http://localhost:3000"))
-        }
-        engine = AggregationEngine(providers)
+        engine = AggregationEngine(
+            listOf(
+                CatalogProvider(
+                    id = "itunes",
+                    tracks = listOf(
+                        track("itunes:thriller", "Michael Jackson", "Thriller", albumTitle = "Thriller"),
+                        track("itunes:rick", "Rick Astley", "Never Gonna Give You Up"),
+                        track("itunes:daft-one-more-time", "Daft Punk", "One More Time", albumTitle = "Discovery")
+                    ),
+                    albums = listOf(discoveryAlbum("itunes:album:1:::Daft Punk:::Discovery")),
+                    trending = listOf(track("itunes:trend", "Daft Punk", "Harder Better Faster Stronger"))
+                ),
+                CatalogProvider(
+                    id = "mb",
+                    tracks = listOf(
+                        track("mb:daft-digital-love", "Daft Punk", "Digital Love", albumTitle = "Discovery"),
+                        track("mb:thriller", "Michael Jackson", "Thriller", artworkUrl = "https://img.test/thriller.jpg")
+                    ),
+                    albums = listOf(discoveryAlbum("mb:album:Daft Punk:::Discovery")),
+                    trending = listOf(track("mb:trend", "Michael Jackson", "Billie Jean"))
+                ),
+                AudioProvider(
+                    id = "sc",
+                    tracks = listOf(
+                        track("sc:lofi", "Lofi Artist", "Lofi Hip Hop"),
+                        track("sc:rick-stream", "Rick Astley", "Never Gonna Give You Up")
+                    )
+                ),
+                AudioProvider(
+                    id = "ytmusic",
+                    tracks = listOf(track("ytmusic:rick-stream", "Rick Astley", "Never Gonna Give You Up"))
+                )
+            )
+        )
     }
 
     @Test
@@ -37,28 +59,20 @@ class AggregationEngineTest {
         val results = engine.searchTracks("Michael Jackson Thriller")
         assertTrue(results.isNotEmpty(), "Search should return tracks")
         assertTrue(results.first().title.contains("Thriller", ignoreCase = true), "First result should match query")
-        assertNotNull(results.first().id, "Track should have an ID")
+        assertTrue(results.first().id.isNotBlank(), "Track should have an ID")
     }
 
     @Test
     fun `test search returns merged results from multiple providers`() = runTest {
         val results = engine.searchTracks("Daft Punk")
-        assertTrue(results.isNotEmpty())
-        val providerIds = results.map { it.id.substringBefore(":") }.distinct()
-        assertTrue(providerIds.isNotEmpty(), "Should have results from at least one provider")
-    }
-
-    @Test
-    fun `test LastFM search`() = runTest {
-        assumeTrue(lastFmKey != null, "Skipping Last.fm test: LASTFM_API_KEY not set")
-        val results = engine.searchTracks("Nirvana")
-        assertTrue(results.isNotEmpty())
+        assertTrue(results.any { it.id.startsWith("itunes:") })
+        assertTrue(results.any { it.id.startsWith("mb:") })
     }
 
     @Test
     fun `test trending aggregates from all providers`() = runTest {
         val trending = engine.getTrending()
-        assertTrue(trending.isNotEmpty(), "Trending should return results")
+        assertEquals(2, trending.size)
     }
 
     @Test
@@ -75,22 +89,25 @@ class AggregationEngineTest {
 
     @Test
     fun `test native SoundCloud stream resolution`() = runTest {
-        val tracks = engine.searchTracks("Lofi Hip Hop")
-        val scTrack = tracks.firstOrNull { it.id.startsWith("sc:") }
-            ?: return@runTest
+        val scTrack = Track(
+            id = "sc:lofi",
+            title = "Lofi Hip Hop",
+            artist = "Lofi Artist",
+            durationMs = 180_000L
+        )
 
         val streamUrl = engine.resolveStream(scTrack)
-        assertTrue(streamUrl.startsWith("http"), "Stream URL should be a valid HTTP link")
+        assertEquals("https://streams.test/sc:lofi", streamUrl)
     }
 
     @Test
     fun `test stream resolution fallback for non-native tracks`() = runTest {
         val tracks = engine.searchTracks("Rick Astley Never Gonna Give You Up")
         val itunesTrack = tracks.firstOrNull { it.id.startsWith("itunes:") }
-            ?: return@runTest
+            ?: error("Expected deterministic iTunes fixture result")
 
         val streamUrl = engine.resolveStream(itunesTrack)
-        assertTrue(streamUrl.startsWith("http"), "Fallback stream URL should be a valid HTTP link")
+        assertTrue(streamUrl.startsWith("https://streams.test/"), "Fallback stream URL should be a valid test link")
     }
 
     @Test
@@ -111,4 +128,85 @@ class AggregationEngineTest {
             "Exception message: '${result.exceptionOrNull()?.message}'"
         )
     }
+
+    private class CatalogProvider(
+        override val id: String,
+        private val tracks: List<Track> = emptyList(),
+        private val albums: List<Album> = emptyList(),
+        private val trending: List<Track> = emptyList()
+    ) : MusicProvider {
+        override val name = "Catalog $id"
+        override val capabilities = buildSet {
+            if (tracks.isNotEmpty()) add(Capability.TRACK_SEARCH)
+            if (albums.isNotEmpty()) {
+                add(Capability.ALBUM_SEARCH)
+                add(Capability.ALBUM_TRACKS)
+            }
+            if (trending.isNotEmpty()) add(Capability.TRENDING)
+        }
+
+        override suspend fun searchTracks(query: String): List<Track> =
+            tracks.filter { matchesQuery("${it.artist} ${it.title} ${it.albumTitle.orEmpty()}", query) }
+
+        override suspend fun searchAlbums(query: String): List<Album> =
+            albums.filter { matchesQuery("${it.artist} ${it.title}", query) }
+
+        override suspend fun getAlbum(artist: String, albumTitle: String): Album? =
+            albums.firstOrNull {
+                it.artist.equals(artist, ignoreCase = true) &&
+                        it.title.equals(albumTitle, ignoreCase = true)
+            }
+
+        override suspend fun getTrending(): List<Track> = trending
+    }
+
+    private class AudioProvider(
+        override val id: String,
+        private val tracks: List<Track>
+    ) : MusicProvider {
+        override val name = "Audio $id"
+        override val capabilities = setOf(Capability.AUDIO_STREAM)
+
+        override suspend fun searchAudio(query: String): List<Track> =
+            tracks.filter { matchesQuery("${it.artist} ${it.title}", query) }
+
+        override suspend fun resolveStream(track: Track): StreamResolutionResult =
+            StreamResolutionResult.Success("https://streams.test/${track.id}", id)
+    }
+}
+
+private fun discoveryAlbum(id: String): Album =
+    Album(
+        id = id,
+        title = "Discovery",
+        artist = "Daft Punk",
+        artworkUrl = "https://img.test/discovery.jpg",
+        year = 2001,
+        tracks = listOf(
+            track("album:one-more-time", "Daft Punk", "One More Time", albumTitle = "Discovery"),
+            track("album:digital-love", "Daft Punk", "Digital Love", albumTitle = "Discovery")
+        )
+    )
+
+private fun track(
+    id: String,
+    artist: String,
+    title: String,
+    albumTitle: String? = null,
+    artworkUrl: String? = null
+): Track =
+    Track(
+        id = id,
+        title = title,
+        artist = artist,
+        artists = listOf(artist),
+        durationMs = 180_000L,
+        artworkUrl = artworkUrl,
+        albumTitle = albumTitle
+    )
+
+private fun matchesQuery(text: String, query: String): Boolean {
+    val haystack = text.lowercase()
+    val tokens = query.lowercase().split(Regex("\\s+")).filter { it.length > 1 }
+    return tokens.all { haystack.contains(it) }
 }
