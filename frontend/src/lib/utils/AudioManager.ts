@@ -27,6 +27,7 @@ const REPEAT_ALL = 1;
 const REPEAT_ONE = 2;
 
 const PRELOAD_SECONDS_BEFORE_END = 15;
+const TRACK_FADE_OUT_SKIP_MS = 400;
 const NORMALIZED_MAX_VOLUME = 0.72;
 const VOLUME_CURVE_EXPONENT = 1.5;
 const TRACK_FADE_OUT_MS = 180;
@@ -52,6 +53,7 @@ class AudioManager {
     private targetVolume = normalizedVolume(get(volume));
     private trackLoadVersion = 0;
     private isVolumeFading = false;
+    private _pendingSkip = false;
 
     constructor() {
         this.audio.autoplay = true;
@@ -190,8 +192,10 @@ class AudioManager {
                 this.populateRecommendationsIfNeeded().catch(console.error);
 
                 if (this.shouldFadeCurrentTrack()) {
-                    this.transitionToTrackWithFade(track, version).catch(console.error);
+                    this.transitionToTrackWithFade(track, version, this._pendingSkip).catch(console.error);
+                    this._pendingSkip = false;
                 } else {
+                    this._pendingSkip = false;
                     this.stopCurrentAudio();
                     this.loadTrack(track, {version}).catch(console.error);
                 }
@@ -228,14 +232,19 @@ class AudioManager {
         this.activeStreamProviderId = null;
     }
 
-    private async transitionToTrackWithFade(track: Track, version: number): Promise<void> {
-        const faded = await this.fadeAudioVolume(this.audio.volume, 0, TRACK_FADE_OUT_MS, version);
-        if (!faded || version !== this.trackLoadVersion) return;
+    private async transitionToTrackWithFade(track: Track, version: number, isSkip = false): Promise<void> {
+        const fadeDuration = isSkip ? TRACK_FADE_OUT_SKIP_MS : TRACK_FADE_OUT_MS;
+        await this.fadeAudioVolume(this.audio.volume, 0, fadeDuration, version);
 
         this.audio.pause();
         this.audio.removeAttribute('src');
         this.audio.load();
-        await this.loadTrack(track, {version, fadeIn: true});
+        this.audio.volume = this.targetVolume;
+        this.isVolumeFading = false;
+
+        if (version !== this.trackLoadVersion) return;
+
+        await this.loadTrack(track, {version, fadeIn: !isSkip});
     }
 
     private async loadTrack(
@@ -545,6 +554,7 @@ class AudioManager {
         }
 
         if (idx + 1 < q.length) {
+            this._pendingSkip = force;
             currentTrackIndex.set(idx + 1);
             if (rm === 0 && get(useRecommendations)) {
                 this.populateRecommendationsIfNeeded().catch(console.error);
@@ -553,6 +563,7 @@ class AudioManager {
         }
 
         if (rm === REPEAT_ALL && !force) {
+            this._pendingSkip = false;
             currentTrackIndex.set(0);
             return;
         }
@@ -567,6 +578,7 @@ class AudioManager {
         
         const newQ = get(queue);
         if (idx + 1 < newQ.length) {
+            this._pendingSkip = false;
             currentTrackIndex.set(idx + 1);
             this.populateRecommendationsIfNeeded().catch(console.error);
         } else {
@@ -580,7 +592,10 @@ class AudioManager {
             this.audio.currentTime = 0;
         } else {
             const idx = get(currentTrackIndex);
-            if (idx > 0) currentTrackIndex.set(idx - 1);
+            if (idx > 0) {
+                this._pendingSkip = true;
+                currentTrackIndex.set(idx - 1);
+            }
         }
     }
 
